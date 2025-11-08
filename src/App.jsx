@@ -2,7 +2,8 @@ import React, { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { Upload, FileText, Edit, Trash2, CheckCircle, AlertCircle, PlusCircle, Download, Plus, Minus, Users, Chair, ClipboardList } from "lucide-react";
+import { Upload, FileText, Edit, Trash2, CheckCircle, AlertCircle, PlusCircle,
+   Download, Plus, Minus, Users,Armchair as Chair, ClipboardList } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable"
 
