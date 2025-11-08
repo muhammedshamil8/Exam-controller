@@ -451,8 +451,8 @@ const App = () => {
 
     if (extractedDate) {
       extractedDate = extractedDate
-        .replace(/\bPM\b/gi, "AN")
-        .replace(/\bAM\b/gi, "FN");
+        .replace(/\bPM\b/gi, "PM - AN")
+        .replace(/\bAM\b/gi, "AM - FN");
     }
 
     const regMatches = [
@@ -795,174 +795,204 @@ const App = () => {
   };
 
   // ----------------- FIXED: Question Paper Distribution PDF (Invigilator Format) -------------------
-  const generateQuestionPaperDistributionPDF = () => {
-    if (distributionPreview.length === 0) {
-      alert("Please generate distribution first using the Preview button");
-      return;
+const generateQuestionPaperDistributionPDF = () => {
+  if (distributionPreview.length === 0) {
+    alert("Please generate distribution first using the Preview button");
+    return;
+  }
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "pt",
+    format: "a4",
+  });
+
+  const examDate = papers[0]?.dateTime || "04-11-2025 FN";
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 30; // Reduced margin for more space
+
+  // Generate one page per hall
+  distributionPreview.forEach((hallData, hallIndex) => {
+    if (hallIndex > 0) {
+      doc.addPage();
     }
 
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "a4",
+    let currentY = margin;
+
+    // Header
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text("EXAM DETAILS - TO: INVIGILATOR", pageWidth / 2, currentY, { align: "center" });
+    currentY += 25;
+
+    // Single table for invigilator and room details
+    const invigilatorData = [
+      ["Name of Invigilator", hallData.invigilator || ""],
+      ["Room Assigned", hallData.hall],
+      ["Hall No:", hallIndex + 1],
+      ["No of Students", hallData.students.length],
+      ["Exam Date", examDate]
+    ];
+
+    autoTable(doc, {
+      startY: currentY,
+      body: invigilatorData,
+      styles: { 
+        fontSize: 10,
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5,
+        cellPadding: 4,
+        minCellHeight: 8
+      },
+      columnStyles: {
+        0: { cellWidth: 150 },
+        1: { cellWidth: pageWidth - (2 * margin) - 150 }
+      },
+      margin: { left: margin, right: margin },
+      tableWidth: pageWidth - (2 * margin),
     });
 
-    const examDate = papers[0]?.dateTime || "04-11-2025 FN";
-    const pageWidth = doc.internal.pageSize.getWidth();
+    currentY = doc.lastAutoTable.finalY + 20;
 
-    // Generate one page per hall
-    distributionPreview.forEach((hallData, hallIndex) => {
-      if (hallIndex > 0) {
-        doc.addPage();
-      }
+    currentY += 7;
 
-      let currentY = 40;
+    // SUBJECTS AND QUESTION PAPER COUNT
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text("SUBJECTS AND QUESTION PAPER COUNT", pageWidth / 2, currentY, { align: "center" });
+    currentY += 15;
 
-      // Header
-      doc.setFontSize(16);
-      doc.text("EXAM DETAILS - TO: INVIGILATOR", pageWidth / 2, currentY, { align: "center" });
-      currentY += 25;
+    const paperCountData = Object.entries(hallData.paperDistribution || {}).map(([paper, students], index) => [
+      index + 1,
+      paper,
+      students.length
+    ]);
 
-      // Single table for invigilator and room details
-      const invigilatorData = [
-        ["Name of Invigilator", hallData.invigilator || ""],
-        ["Room Assigned", hallData.hall],
-        ["Hall No:", hallIndex + 1],
-        ["No of Students", hallData.students.length],
-        ["Exam Date", examDate]
-      ];
-
-      autoTable(doc, {
-        startY: currentY,
-        body: invigilatorData,
-        styles: { 
-          fontSize: 10,
-          fillColor: [255, 255, 255],
-          textColor: [0, 0, 0],
-          lineColor: [0, 0, 0],
-          lineWidth: 0.5,
-          cellPadding: 4,
-          minCellHeight: 8
-        },
-        margin: { left: 40, right: 40 },
-        tableWidth: pageWidth - 80,
-      });
-
-      currentY = doc.lastAutoTable.finalY + 20;
-
-      // SUBJECTS AND QUESTION PAPER COUNT
-      doc.setFontSize(14);
-      doc.text("SUBJECTS AND QUESTION PAPER COUNT", pageWidth / 2, currentY, { align: "center" });
-      currentY += 20;
-
-      const paperCountData = Object.entries(hallData.paperDistribution || {}).map(([paper, students], index) => [
-        index + 1,
-        paper,
-        students.length
-      ]);
-
-      autoTable(doc, {
-        startY: currentY,
-        head: [["SL", "NAME OF SUBJECT", "COUNT"]],
-        body: paperCountData,
-        styles: { 
-          fontSize: 9,
-          fillColor: [255, 255, 255],
-          textColor: [0, 0, 0],
-          lineColor: [0, 0, 0],
-          lineWidth: 0.5,
-          cellPadding: 3,
-          minCellHeight: 8
-        },
-        headStyles: { 
-          fillColor: [255, 255, 255],
-          textColor: [0, 0, 0],
-          fontStyle: 'bold',
-          lineColor: [0, 0, 0],
-          lineWidth: 0.5
-        },
-        margin: { left: 40, right: 40 },
-      });
-
-      currentY = doc.lastAutoTable.finalY + 20;
-
-      // STUDENTS LIST
-      doc.setFontSize(14);
-      doc.text("STUDENTS LIST", pageWidth / 2, currentY, { align: "center" });
-      currentY += 20;
-
-      // Prepare student data for all papers in this hall WITH PROPER FORMATTING
-      const allStudents = [];
-      let globalRnbbCounter = 1;
-      
-      Object.entries(hallData.paperDistribution || {}).forEach(([paper, students]) => {
-        // Sort students by register number to maintain order - by prefix then number
-        const sortedStudents = [...students].sort((a, b) => {
-          const prefixA = a.registerNumber.replace(/\d+$/, '');
-          const prefixB = b.registerNumber.replace(/\d+$/, '');
-          const numA = parseInt(a.registerNumber.replace(prefixA, '')) || 0;
-          const numB = parseInt(b.registerNumber.replace(prefixB, '')) || 0;
-          
-          if (prefixA !== prefixB) {
-            return prefixA.localeCompare(prefixB);
-          }
-          return numA - numB;
-        });
-
-        sortedStudents.forEach((student, studentIndex) => {
-          allStudents.push([
-            `RNBB${globalRnbbCounter}`,
-            student.registerNumber,
-            studentIndex === 0 ? paper : '"', // Use " for repeated subjects
-            ""
-          ]);
-          globalRnbbCounter++;
-        });
-      });
-
-      autoTable(doc, {
-        startY: currentY,
-        head: [["RNBB", "REG NO", "SUBJECT NAME", "REMARKS"]],
-        body: allStudents,
-        styles: { 
-          fontSize: 7,
-          fillColor: [255, 255, 255],
-          textColor: [0, 0, 0],
-          lineColor: [0, 0, 0],
-          lineWidth: 0.5,
-          cellPadding: 2,
-          minCellHeight: 6
-        },
-        headStyles: { 
-          fillColor: [255, 255, 255],
-          textColor: [0, 0, 0],
-          fontStyle: 'bold',
-          lineColor: [0, 0, 0],
-          lineWidth: 0.5
-        },
-        margin: { left: 40, right: 40 },
-        columnStyles: {
-          0: { cellWidth: 50 }, // RNBB
-          1: { cellWidth: 90 }, // REG NO
-          2: { cellWidth: 230 }, // SUBJECT NAME
-          3: { cellWidth: 60 }  // REMARKS
-        },
-      });
-
-      currentY = doc.lastAutoTable.finalY + 30;
-
-      // Signature
-      doc.setFontSize(10);
-      doc.text("Signature", 40, currentY);
-
-      // Page number
-      const pageCount = doc.internal.getNumberOfPages();
-      doc.setFontSize(8);
-      doc.text(`Page ${hallIndex + 1} of ${distributionPreview.length}`, pageWidth - 80, doc.internal.pageSize.getHeight() - 20);
+    autoTable(doc, {
+      startY: currentY,
+      head: [["SL", "NAME OF SUBJECT", "COUNT"]],
+      body: paperCountData,
+      styles: { 
+        fontSize: 9,
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5,
+        cellPadding: 3,
+        minCellHeight: 8
+      },
+      headStyles: { 
+        fillColor: [240, 240, 240],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5
+      },
+      columnStyles: {
+        0: { cellWidth: 40, halign: 'center' },
+        1: { cellWidth: pageWidth - (2 * margin) - 100 },
+        2: { cellWidth: 60, halign: 'center' }
+      },
+      margin: { left: margin, right: margin },
+      tableWidth: pageWidth - (2 * margin),
     });
 
-    doc.save("question-paper-distribution-invigilator.pdf");
-  };
+    currentY = doc.lastAutoTable.finalY + 15;
+
+    currentY += 7;
+
+    // STUDENTS LIST
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text("STUDENTS LIST", pageWidth / 2, currentY, { align: "center" });
+    currentY += 12;
+
+    // Prepare student data for all papers in this hall
+    const allStudents = [];
+    let globalRnbbCounter = 1;
+    
+    Object.entries(hallData.paperDistribution || {}).forEach(([paper, students]) => {
+      // Sort students by register number
+      const sortedStudents = [...students].sort((a, b) => {
+        const prefixA = a.registerNumber.replace(/\d+$/, '');
+        const prefixB = b.registerNumber.replace(/\d+$/, '');
+        const numA = parseInt(a.registerNumber.replace(prefixA, '')) || 0;
+        const numB = parseInt(b.registerNumber.replace(prefixB, '')) || 0;
+        
+        if (prefixA !== prefixB) {
+          return prefixA.localeCompare(prefixB);
+        }
+        return numA - numB;
+      });
+
+      sortedStudents.forEach((student, studentIndex) => {
+        allStudents.push([
+          `RNBB${globalRnbbCounter}`,
+          student.registerNumber,
+          studentIndex === 0 ? paper : '"',
+          ""
+        ]);
+        globalRnbbCounter++;
+      });
+    });
+
+    // Calculate available space for students table
+    const availableHeight = pageHeight - currentY - 60; // Reserve space for signature and page number
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [["RNBB", "REG NO", "SUBJECT NAME", "REMARKS"]],
+      body: allStudents,
+      styles: { 
+        fontSize: 8,
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5,
+        cellPadding: 3,
+        minCellHeight: 7
+      },
+      headStyles: { 
+        fillColor: [240, 240, 240],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5,
+        halign: 'center'
+      },
+      columnStyles: {
+        0: { cellWidth: 60, halign: 'center' },
+        1: { cellWidth: 100, halign: 'center' },
+        2: { cellWidth: pageWidth - (2 * margin) - 260 },
+        3: { cellWidth: 100, halign: 'center' }
+      },
+      margin: { left: margin, right: margin },
+      tableWidth: pageWidth - (2 * margin),
+      tableLineColor: [0, 0, 0],
+      tableLineWidth: 0.5,
+    });
+
+    // Position signature at bottom
+    const signatureY = pageHeight - 40;
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text("Signature: ____________________", margin, signatureY);
+
+    // Page number at bottom right
+    doc.setFontSize(8);
+    doc.text(
+      `Page ${hallIndex + 1} of ${distributionPreview.length}`, 
+      pageWidth - margin - 60, 
+      pageHeight - 20
+    );
+  });
+
+  doc.save("question-paper-distribution-invigilator.pdf");
+};
+
 
   // ----------------- FIXED: Seat Arrangement PDF Generation -------------------
   const generateSeatArrangementPDF = () => {
