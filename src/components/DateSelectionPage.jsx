@@ -2,9 +2,23 @@
 import React, { useState } from "react";
 import PDFUpload from "./PDFUpload";
 import ManualInput from "./ManualInput";
-import { Upload, Edit, Eye, ArrowRight, ArrowLeft, Calendar, Clock } from "lucide-react";
+import {
+  Upload,
+  Edit,
+  Eye,
+  ArrowRight,
+  ArrowLeft,
+  Calendar,
+  Clock,
+} from "lucide-react";
 
-const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }) => {
+const DateSelectionPage = ({
+  exam,
+  updateExam,
+  onContinue,
+  onViewFiles,
+  onBack,
+}) => {
   const [mode, setMode] = useState("upload");
   const [selectedDate, setSelectedDate] = useState(exam?.date || "");
   const [session, setSession] = useState(exam?.session || "FN");
@@ -14,10 +28,10 @@ const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }
       alert("Please select a date");
       return;
     }
-    updateExam(exam.id, { 
-      date: selectedDate, 
+    updateExam(exam.id, {
+      date: selectedDate,
       session: session,
-      name: `Exam ${new Date(selectedDate).toLocaleDateString()} ${session}`
+      name: `Exam ${new Date(selectedDate).toLocaleDateString()} ${session}`,
     });
   };
 
@@ -39,13 +53,19 @@ const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }
 
       {/* Exam Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">{exam?.name || "New Exam"}</h2>
-        <p className="text-gray-600">Configure date, session, and papers for this exam</p>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          {exam?.name || "New Exam"}
+        </h2>
+        <p className="text-gray-600">
+          Configure date, session, and papers for this exam
+        </p>
       </div>
 
       {/* Date and Session Selection */}
       <div className="mb-8 p-6 bg-gray-50 rounded-lg border border-gray-300">
-        <h3 className="text-xl font-bold mb-4 text-gray-800">Exam Date & Session</h3>
+        <h3 className="text-xl font-bold mb-4 text-gray-800">
+          Exam Date & Session
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -59,7 +79,7 @@ const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }
               className="w-full p-3 border border-gray-300 rounded-lg"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Clock className="w-4 h-4 inline mr-1" />
@@ -70,27 +90,28 @@ const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }
               onChange={(e) => setSession(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg"
             >
-              <option value="FN">Forenoon (FN) - 9:30 AM to 12:30 PM</option>
-              <option value="AN">Afternoon (AN) - 2:00 PM to 5:00 PM</option>
+              <option value="FN">Forenoon (FN)</option>
+              <option value="AN">Afternoon (AN)</option>
             </select>
           </div>
         </div>
-        
+
         <button
           onClick={handleDateSubmit}
-          className="mt-4 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-semibold"
+          className="mt-4 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-semibold mr-2"
         >
           Save Date & Session
         </button>
-        
+
         {exam?.date && (
           <div className="mt-3 p-3 bg-green-100 border border-green-300 text-green-800 rounded-lg inline-flex items-center gap-2">
-            ✓ Date set: {new Date(exam.date).toLocaleDateString()} ({exam.session === "FN" ? "Forenoon" : "Afternoon"})
+            ✓ Date set: {new Date(exam.date).toLocaleDateString()} (
+            {exam.session === "FN" ? "Forenoon" : "Afternoon"})
           </div>
         )}
       </div>
 
-       {/* Mode Toggle */}
+      {/* Mode Toggle */}
       <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
         <button
           onClick={() => setMode("upload")}
@@ -116,14 +137,18 @@ const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }
 
       {/* Content based on mode */}
       {mode === "upload" ? (
-        <PDFUpload 
+        <PDFUpload
           papers={exam.papers}
           onPapersUpdate={handlePapersUpdate}
+          selectedDate={selectedDate}
+          session={session}
         />
       ) : (
-        <ManualInput 
+        <ManualInput
           papers={exam.papers}
           onPapersUpdate={handlePapersUpdate}
+          selectedDate={selectedDate}
+          session={session}
         />
       )}
 
@@ -135,7 +160,7 @@ const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }
         >
           <Eye className="w-4 h-4" /> View All Files
         </button>
-        
+
         <button
           onClick={onContinue}
           disabled={!canContinue}
@@ -156,7 +181,10 @@ const DateSelectionPage = ({ exam, updateExam, onContinue, onViewFiles, onBack }
           <p className="text-gray-700">
             <strong>{exam.papers.length}</strong> paper(s) loaded •{" "}
             <strong>
-              {exam.papers.reduce((sum, paper) => sum + paper.registerNumbers.length, 0)}
+              {exam.papers.reduce(
+                (sum, paper) => sum + paper.registerNumbers.length,
+                0
+              )}
             </strong>{" "}
             total students
           </p>
