@@ -1,4 +1,3 @@
-"use client";
 import React, { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as pdfjsLib from "pdfjs-dist";
@@ -22,9 +21,10 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
 
   const extractDataFromText = (text) => {
     const coursePatterns = [
-      /(?:Course|Subject|Paper)?\s*[:]*\s*([A-Z0-9()-]+\s*-\s*[^[]+)/i,
-      /^([A-Z]{2,}[0-9A-Z()-]+\s*-\s*.+)$/im,
+      /(?:Course|Subject|Paper)?\s*[:]*\s*([A-Z0-9]+(?:\s*\([^)]*\))?\s*-\s*[^[]+)/i,
+      /^([A-Z]{2,}[0-9A-Z]+(?:\s*\([^)]*\))?\s*-\s*.+)$/im,
     ];
+
     let extractedCourse = "";
     for (const pattern of coursePatterns) {
       const match = text.match(pattern);
@@ -54,16 +54,24 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
     if (!extractedDateTime) {
       const dateMatch = text.match(/(\d{1,2}[./-]\d{1,2}[./-]\d{4})/);
       const timeMatch = text.match(/(\d{1,2}:\d{2}\s*[APMapm]*)/);
-      if (dateMatch && timeMatch) extractedDateTime = `${dateMatch[1]} ${timeMatch[1]}`;
+      if (dateMatch && timeMatch)
+        extractedDateTime = `${dateMatch[1]} ${timeMatch[1]}`;
       else if (dateMatch) extractedDateTime = dateMatch[1];
       else if (timeMatch) extractedDateTime = timeMatch[1];
     }
 
-    text = text.replace(/\b[A-Z]{2,}\d{2,}[A-Z]{0,}\s*-\s*[^.\n]+/g, "");
+    // text = text.replace(/\b[A-Z]{2,}\d{2,}[A-Z]{0,}\s*-\s*[^.\n]+/g, "");
+    text = text.replace(/\b[A-Z]{2,}\d{2,}[A-Z]{0,}\s*-\s*[^\n(]+$/gm, "");
 
-    const regMatches = [...text.matchAll(/\b([A-Z]{2,}[A-Z0-9]*\d{2,})\b/g)].map((m) => m[1]);
-    let validRegs = [...new Set(regMatches)].filter((r) => /^[A-Z]+[A-Z0-9]*\d+$/.test(r));
-    validRegs = validRegs.filter((r) => !/[A-Z]{2,}\d[A-Z]{1,}/.test(r.slice(0, 8)));
+    const regMatches = [
+      ...text.matchAll(/\b([A-Z]{2,}[A-Z0-9]*\d{2,})\b/g),
+    ].map((m) => m[1]);
+    let validRegs = [...new Set(regMatches)].filter((r) =>
+      /^[A-Z]+[A-Z0-9]*\d+$/.test(r)
+    );
+    validRegs = validRegs.filter(
+      (r) => !/[A-Z]{2,}\d[A-Z]{1,}/.test(r.slice(0, 8))
+    );
 
     validRegs.sort((a, b) => {
       const prefixA = a.replace(/\d+$/, "");
@@ -114,76 +122,75 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
     return warnings;
   };
 
- const formatDateTimeWarnings = (warnings) =>
-  warnings.map((warning, index) => (
-    <div
-      key={index}
-      className={`p-3 rounded-lg mb-2 ${
-        warning.severity === "error"
-          ? "bg-red-50 border border-red-200"
-          : "bg-yellow-50 border border-yellow-200"
-      }`}
-    >
-      <div className="flex items-start gap-2">
-        <AlertCircle
-          className={`w-5 h-5 mt-0.5 ${
-            warning.severity === "error" ? "text-red-600" : "text-yellow-600"
-          }`}
-        />
-        <div className="flex-1">
-          <p
-            className={`font-medium ${
-              warning.severity === "error"
-                ? "text-red-800"
-                : "text-yellow-800"
+  const formatDateTimeWarnings = (warnings) =>
+    warnings.map((warning, index) => (
+      <div
+        key={index}
+        className={`p-3 rounded-lg mb-2 ${
+          warning.severity === "error"
+            ? "bg-red-50 border border-red-200"
+            : "bg-yellow-50 border border-yellow-200"
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          <AlertCircle
+            className={`w-5 h-5 mt-0.5 ${
+              warning.severity === "error" ? "text-red-600" : "text-yellow-600"
             }`}
-          >
-            {warning.message}
-          </p>
+          />
+          <div className="flex-1">
+            <p
+              className={`font-medium ${
+                warning.severity === "error"
+                  ? "text-red-800"
+                  : "text-yellow-800"
+              }`}
+            >
+              {warning.message}
+            </p>
 
-          {/* ✅ Handle conflict warnings */}
-          {warning.type === "conflict" && warning.details && (
-            <div className="mt-2 text-sm">
-              {warning.details.map((detail, idx) => (
-                <div key={idx} className="ml-2 mt-1 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="font-mono text-gray-600">
-                    {detail.dateTime}
-                  </span>
-                  {detail.files?.length > 0 && (
-                    <span className="text-gray-500">
-                      – {detail.files.join(", ")}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ✅ Handle date/session mismatch warnings */}
-          {(warning.type === "date-mismatch" ||
-            warning.type === "session-mismatch") &&
-            warning.details && (
+            {/* ✅ Handle conflict warnings */}
+            {warning.type === "conflict" && warning.details && (
               <div className="mt-2 text-sm">
-                <ul className="ml-4 list-disc text-gray-600">
-                  {warning.details.map((d, idx) => (
-                    <li key={idx}>{d}</li>
-                  ))}
-                </ul>
+                {warning.details.map((detail, idx) => (
+                  <div key={idx} className="ml-2 mt-1 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="font-mono text-gray-600">
+                      {detail.dateTime}
+                    </span>
+                    {detail.files?.length > 0 && (
+                      <span className="text-gray-500">
+                        – {detail.files.join(", ")}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
-          {/* ✅ Handle missing date/time warnings */}
-          {warning.type === "missing" && warning.fileName && (
-            <div className="mt-2 text-sm text-gray-600 ml-4">
-              File: {warning.fileName}
-            </div>
-          )}
+            {/* ✅ Handle date/session mismatch warnings */}
+            {(warning.type === "date-mismatch" ||
+              warning.type === "session-mismatch") &&
+              warning.details && (
+                <div className="mt-2 text-sm">
+                  <ul className="ml-4 list-disc text-gray-600">
+                    {warning.details.map((d, idx) => (
+                      <li key={idx}>{d}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+            {/* ✅ Handle missing date/time warnings */}
+            {warning.type === "missing" && warning.fileName && (
+              <div className="mt-2 text-sm text-gray-600 ml-4">
+                File: {warning.fileName}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  ));
-
+    ));
 
   const onDrop = useCallback((acceptedFiles) => {
     setFiles((prev) => [
@@ -235,8 +242,12 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
           : "";
 
         if (data.dateTime) {
-          const pdfDateNorm = data.dateTime.replace(/[^0-9A-Za-z]/g, "").toLowerCase();
-          const selectedNorm = formattedSelected.replace(/[^0-9A-Za-z]/g, "").toLowerCase();
+          const pdfDateNorm = data.dateTime
+            .replace(/[^0-9A-Za-z]/g, "")
+            .toLowerCase();
+          const selectedNorm = formattedSelected
+            .replace(/[^0-9A-Za-z]/g, "")
+            .toLowerCase();
 
           if (formattedSelected && !pdfDateNorm.includes(selectedNorm)) {
             warnings.push({
@@ -250,7 +261,9 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
             });
           }
 
-          const extractedSession = data.dateTime.toUpperCase().includes("AN") ? "AN" : "FN";
+          const extractedSession = data.dateTime.toUpperCase().includes("AN")
+            ? "AN"
+            : "FN";
           if (session && extractedSession !== session) {
             warnings.push({
               type: "session-mismatch",
@@ -305,7 +318,9 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
         <input {...getInputProps()} />
         <Upload className="w-16 h-16 mx-auto mb-4 text-gray-400" />
         <p className="text-gray-700 font-medium">
-          {isDragActive ? "Drop PDF files here" : "Drag & drop or click to upload PDFs"}
+          {isDragActive
+            ? "Drop PDF files here"
+            : "Drag & drop or click to upload PDFs"}
         </p>
         <p className="text-gray-500 text-sm mt-2">
           Upload all PDFs for the same exam schedule

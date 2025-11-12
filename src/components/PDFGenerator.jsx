@@ -794,7 +794,8 @@ const PDFGenerator = ({ examData }) => {
 
           sortedStudents.forEach((student, studentIndex) => {
             allStudents.push([
-              `RNBB${globalRnbbCounter}`,
+              // `RNBB${globalRnbbCounter}`,
+              `${globalRnbbCounter}`,
               student.registerNumber,
               studentIndex === 0 ? paper : '"',
               "",
@@ -809,7 +810,7 @@ const PDFGenerator = ({ examData }) => {
 
       autoTable(doc, {
         startY: currentY,
-        head: [["RNBB", "REG NO", "SUBJECT NAME", "REMARKS"]],
+        head: [["SL", "REG NO", "SUBJECT NAME", "REMARKS"]],
         body: allStudents,
         styles: {
           fontSize: 8,
@@ -871,27 +872,47 @@ const PDFGenerator = ({ examData }) => {
       format: "a4",
     });
 
-    let currentY = 40;
-
-    // Header - Centered
-    doc.setFontSize(16);
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let currentY = 50;
+
+    // Header - Centered with better spacing
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
     doc.text(
-      "SEAT ARRANGEMENT - UNIVERSITY EXAMINATION",
+      "SEAT ARRANGEMENT",
       pageWidth / 2,
       currentY,
       { align: "center" }
     );
-    currentY += 25;
+    currentY += 20;
 
-    doc.setFontSize(12);
+    doc.setFontSize(14);
+    doc.text(
+      "UNIVERSITY EXAMINATION",
+      pageWidth / 2,
+      currentY,
+      { align: "center" }
+    );
+    currentY += 30;
+
+    // Exam details with better formatting
+    doc.setFontSize(11);
+    doc.setFont(undefined, "normal");
     const examDate = papers[0]?.dateTime || "04-11-2025 FN";
     doc.text(`Date of Examination: ${examDate}`, pageWidth / 2, currentY, {
       align: "center",
     });
-    currentY += 30;
+    currentY += 8;
+    // currentY += 8;
+    
+    const totalStudents = seatArrangementData.reduce((sum, hall) => sum + hall.students.length, 0);
+    // doc.text(`Total Students: ${totalStudents}`, pageWidth / 2, currentY, {
+    //   align: "center",
+    // });
+    currentY += 25;
 
-    // Seat Arrangement Table with formatted register numbers
+    // Seat Arrangement Table with improved styling
     const seatData = seatArrangementData.map((hall) => {
       const rangeDisplay = formatRegisterNumbers(hall.students);
       const regList = formatRegisterNumbersList(hall.students);
@@ -901,38 +922,60 @@ const PDFGenerator = ({ examData }) => {
 
     autoTable(doc, {
       startY: currentY,
-      head: [["SL", "ROOM", "REG NO-RANGE", "REG NOS"]],
+      head: [["SL", "ROOM", "REG NO RANGE", "REGISTER NUMBERS"]],
       body: seatData,
       styles: {
-        fontSize: 8,
+        fontSize: 9,
         fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-        cellPadding: 3,
+        textColor: [40, 40, 40],
+        lineColor: [100, 100, 100],
+        lineWidth: 0.75,
+        cellPadding: 6,
+        valign: "middle",
+        halign: "left",
       },
       headStyles: {
-        fillColor: [255, 255, 255],
+        fillColor: [240, 240, 240],
         textColor: [0, 0, 0],
         fontStyle: "bold",
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
+        lineColor: [100, 100, 100],
+        lineWidth: 0.75,
+        fontSize: 10,
+        cellPadding: 8,
       },
       columnStyles: {
-        0: { cellWidth: 30 }, // SL
-        1: { cellWidth: 60 }, // ROOM
-        2: { cellWidth: 150 }, // REG NO-RANGE
-        3: { cellWidth: 250 }, // REG NOS
+        0: { cellWidth: 35, halign: "center" }, // SL
+        1: { cellWidth: 80, halign: "center" }, // ROOM
+        2: { cellWidth: 140 }, // REG NO RANGE
+        3: { cellWidth: 275 }, // REG NOS
       },
-      margin: { left: 20, right: 20 },
+      margin: { left: 30, right: 30, top: 50, bottom: 40 },
+      alternateRowStyles: {
+        fillColor: [250, 250, 250],
+      },
       didDrawPage: (data) => {
+        // Footer with page numbers
         const pageCount = doc.internal.getNumberOfPages();
         const page = doc.internal.getCurrentPageInfo().pageNumber;
-        doc.setFontSize(8);
+        
+        doc.setFontSize(9);
+        doc.setFont(undefined, "normal");
+        doc.setTextColor(100, 100, 100);
+        
+        // Page number centered at bottom
         doc.text(
           `Page ${page} of ${pageCount}`,
-          pageWidth - 80,
-          doc.internal.pageSize.getHeight() - 20
+          pageWidth / 2,
+          pageHeight - 25,
+          { align: "center" }
+        );
+        
+        // Generation date on left
+        const today = new Date().toLocaleDateString('en-GB');
+        doc.text(
+          `Generated: ${today}`,
+          30,
+          pageHeight - 25
         );
       },
     });
