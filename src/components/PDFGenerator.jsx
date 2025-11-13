@@ -810,7 +810,7 @@ const PDFGenerator = ({ examData }) => {
 
       autoTable(doc, {
         startY: currentY,
-        head: [["SL", "REG NO", "SUBJECT NAME", "REMARKS"]],
+        head: [["SL", "REG NO", "SUBJECT NAME", "SIGNATURE"]],
         body: allStudents,
         styles: {
           fontSize: 8,
