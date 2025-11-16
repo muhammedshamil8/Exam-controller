@@ -21,6 +21,8 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
 
   const extractDataFromText = (text) => {
     const coursePatterns = [
+      /Paper Details\s*[:]*\s*(.+?--\([A-Za-z0-9]+\)\s*\/\s*\d{4})/i,
+      // old patterns remain below
       /(?:Course|Subject|Paper)?\s*[:]*\s*([A-Z0-9]+(?:\s*\([^)]*\))?\s*-\s*[^[]+)/i,
       /^([A-Z]{2,}[0-9A-Z]+(?:\s*\([^)]*\))?\s*-\s*.+)$/im,
     ];
@@ -35,6 +37,7 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
     }
 
     const dateTimePatterns = [
+      /Exam Date\s*[:]*\s*([\d./-]+\s+[0-9:APM\s]+)/i,
       /Date\s+of\s+Examination\s*[:]*\s*([\d./-]+\s+[0-9:APM\s]+)/i,
       /Date\s*[:]*\s*([\d./-]+\s+[0-9:APM\s]+)/i,
       /Exam\s+Date\s*[:]*\s*([\d./-]+\s+[0-9:APM\s]+)/i,
@@ -63,9 +66,10 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
     // text = text.replace(/\b[A-Z]{2,}\d{2,}[A-Z]{0,}\s*-\s*[^.\n]+/g, "");
     text = text.replace(/\b[A-Z]{2,}\d{2,}[A-Z]{0,}\s*-\s*[^\n(]+$/gm, "");
 
-    const regMatches = [
-      ...text.matchAll(/\b([A-Z]{2,}[A-Z0-9]*\d{2,})\b/g),
-    ].map((m) => m[1]);
+    const regMatches = [...text.matchAll(/\b([A-Z]{6,}[A-Z]*\d{2,3})\b/g)].map(
+      (m) => m[1]
+    );
+
     let validRegs = [...new Set(regMatches)].filter((r) =>
       /^[A-Z]+[A-Z0-9]*\d+$/.test(r)
     );

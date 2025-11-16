@@ -1020,6 +1020,54 @@ const PDFGenerator = ({ examData }) => {
       >
         <Users className="w-4 h-4" /> Preview Distribution
       </button>
+      {/* i mean hall name and invigilator name alert message */}
+      <div className="mb-4">
+        {distributionPreview.some((hall) => hall.hall.startsWith("HALL-")) && (
+          <div className="p-3 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-lg">
+            <AlertCircle className="w-4 h-4 inline mr-2" />
+            Some halls are using default names (e.g., HALL-1). Please consider
+            assigning proper names for better clarity.
+          </div>
+        )}
+      </div>
+
+  <div className="flex gap-2 justify-end mb-4 flex-col md:flex-row">
+        <button
+          onClick={generateQuestionPaperDistributionPDF}
+          disabled={distributionPreview.length === 0}
+          className={`flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium ${
+            distributionPreview.length === 0
+              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+              : "bg-purple-600 text-white hover:bg-purple-700"
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" /> Question Paper Distribution
+        </button>
+
+        <button
+          onClick={generateSeatArrangementPDF}
+          disabled={seatArrangementData.length === 0}
+          className={`flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium ${
+            seatArrangementData.length === 0
+              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          }`}
+        >
+          <Chair className="w-4 h-4" /> Seat Arrangement PDF
+        </button>
+
+        <button
+          onClick={generatePDF}
+          disabled={isGenerateDisabled}
+          className={`flex items-center justify-center gap-2 px-6 py-3 rounded-md font-medium ${
+            isGenerateDisabled
+              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+              : "bg-gray-800 text-white hover:bg-gray-900"
+          }`}
+        >
+          <Download className="w-4 h-4" /> Exam Summary PDF
+        </button>
+      </div>
 
       {/* Distribution Preview */}
       {distributionPreview.length > 0 && (
@@ -1099,43 +1147,7 @@ const PDFGenerator = ({ examData }) => {
         )}
       </div>
 
-      <div className="flex gap-2 justify-end">
-        <button
-          onClick={generateQuestionPaperDistributionPDF}
-          disabled={distributionPreview.length === 0}
-          className={`flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium ${
-            distributionPreview.length === 0
-              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-              : "bg-purple-600 text-white hover:bg-purple-700"
-          }`}
-        >
-          <ClipboardList className="w-4 h-4" /> Question Paper Distribution
-        </button>
-
-        <button
-          onClick={generateSeatArrangementPDF}
-          disabled={seatArrangementData.length === 0}
-          className={`flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium ${
-            seatArrangementData.length === 0
-              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-              : "bg-blue-600 text-white hover:bg-blue-700"
-          }`}
-        >
-          <Chair className="w-4 h-4" /> Seat Arrangement PDF
-        </button>
-
-        <button
-          onClick={generatePDF}
-          disabled={isGenerateDisabled}
-          className={`flex items-center justify-center gap-2 px-6 py-3 rounded-md font-medium ${
-            isGenerateDisabled
-              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-              : "bg-gray-800 text-white hover:bg-gray-900"
-          }`}
-        >
-          <Download className="w-4 h-4" /> Exam Summary PDF
-        </button>
-      </div>
+    
     </div>
   );
 };

@@ -22,6 +22,7 @@ const DateSelectionPage = ({
   const [mode, setMode] = useState("upload");
   const [selectedDate, setSelectedDate] = useState(exam?.date || "");
   const [session, setSession] = useState(exam?.session || "FN");
+  const [showFilesList, setShowFilesList] = useState(false);
 
   const handleDateSubmit = () => {
     if (!selectedDate) {
@@ -41,16 +42,36 @@ const DateSelectionPage = ({
 
   const canContinue = exam?.papers?.length > 0 && exam?.date;
 
+  const clearAll = () => {
+    if (window.confirm("Are you sure you want to clear all papers?")) {
+      updateExam(exam.id, { papers: [] });
+    }
+  };
+
+  const toggleFilesList = () => {
+    setShowFilesList(!showFilesList);
+  };
+
   return (
     <div>
       {/* Back Button */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg mb-6"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Exams
-      </button>
-
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg "
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Exams
+        </button>
+        <button
+          disabled={!selectedDate || exam?.papers?.length === 0}
+          onClick={onViewFiles}
+          className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold
+          disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer
+          "
+        >
+          <Eye className="w-4 h-4" /> View All Files
+        </button>
+      </div>
       {/* Exam Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-2">
@@ -115,7 +136,7 @@ const DateSelectionPage = ({
       <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
         <button
           onClick={() => setMode("upload")}
-          className={`px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 ${
+          className={`px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 text-sm sm:text-medium ${
             mode === "upload"
               ? "bg-gray-800 text-white shadow-md"
               : "bg-transparent text-gray-600 hover:bg-gray-200"
@@ -125,7 +146,7 @@ const DateSelectionPage = ({
         </button>
         <button
           onClick={() => setMode("manual")}
-          className={`px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 ${
+          className={`px-6 py-2.5 rounded-md font-medium transition-all flex items-center gap-2 text-sm sm:text-medium ${
             mode === "manual"
               ? "bg-gray-800 text-white shadow-md"
               : "bg-transparent text-gray-600 hover:bg-gray-200"
@@ -136,34 +157,39 @@ const DateSelectionPage = ({
       </div>
 
       {/* Content based on mode */}
-      {mode === "upload" ? (
-        <PDFUpload
-          papers={exam.papers}
-          onPapersUpdate={handlePapersUpdate}
-          selectedDate={selectedDate}
-          session={session}
-        />
-      ) : (
-        <ManualInput
-          papers={exam.papers}
-          onPapersUpdate={handlePapersUpdate}
-          selectedDate={selectedDate}
-          session={session}
-        />
-      )}
+      <div
+        disable={!selectedDate}
+        className={!exam?.date ? "opacity-50 pointer-events-none" : ""}
+      >
+        {!selectedDate && (
+          <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-lg">
+            ⚠ Please select and save an exam date and session to proceed.
+          </div>
+        )}
+        {mode === "upload" ? (
+          <PDFUpload
+            papers={exam.papers}
+            onPapersUpdate={handlePapersUpdate}
+            selectedDate={selectedDate}
+            session={session}
+          />
+        ) : (
+          <ManualInput
+            papers={exam.papers}
+            onPapersUpdate={handlePapersUpdate}
+            selectedDate={selectedDate}
+            session={session}
+          />
+        )}
+      </div>
 
       {/* Action Buttons */}
       <div className="flex justify-between mt-8 pt-6 border-t border-gray-300">
-        <button
-          onClick={onViewFiles}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
-        >
-          <Eye className="w-4 h-4" /> View All Files
-        </button>
+        <div />
 
         <button
           onClick={onContinue}
-          disabled={!canContinue}
+          disabled={!canContinue || !selectedDate || exam?.papers?.length === 0}
           className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold ${
             canContinue
               ? "bg-gray-800 text-white hover:bg-gray-900"
@@ -188,6 +214,43 @@ const DateSelectionPage = ({
             </strong>{" "}
             total students
           </p>
+          <button
+            onClick={clearAll}
+            className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold"
+          >
+            Clear All Papers
+          </button>
+          <button
+            onClick={toggleFilesList}
+            className="mt-3 ml-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+          >
+            {showFilesList ? "Hide Files" : "Show Files"}
+          </button>
+        </div>
+      )}
+
+      {/* File Upload Unavailable Notice */}
+      {showFilesList && (
+        <div className="mb-6 p-6 bg-gray-50 border border-gray-300 rounded-lg mt-6">
+          <p className="text-gray-600 text-center py-4">
+            uploaded File show functionality is not available now.
+          </p>
+          {exam && exam.papers && exam.papers.length > 0 && (
+            <div className="space-y-4">
+              {exam.papers.map((p, index) => (
+                <div
+                  key={index}
+                  className="text-gray-700 bg-gray-100 p-4 rounded-lg border"
+                >
+                  <p className="font-semibold">Paper: {p.course}</p>
+                  <p>
+                    Date: {exam.date} {exam.session}
+                  </p>
+                  <p>Total Students: {p.registerNumbers.length}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

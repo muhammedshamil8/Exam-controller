@@ -1,8 +1,29 @@
 // components/ExamListPage.js
 import React, { useState } from "react";
-import { Plus, Calendar, Users, FileText, Trash2, Edit, Clock, ArrowRight } from "lucide-react";
+import { Plus, Calendar, Users, FileText, Trash2, Edit, Clock, ArrowRight , HardDrive } from "lucide-react";
 
-const ExamListPage = ({ exams, onCreateNew, onSelectExam, onDeleteExam }) => {
+
+// storage helpers
+const MAX_STORAGE = 5 * 1024 * 1024;
+
+const formatBytes = (bytes) => {
+  const kb = bytes / 1024;
+  if (kb < 1024) return kb.toFixed(2) + " KB";
+  return (kb / 1024).toFixed(2) + " MB";
+};
+
+const getLocalStorageSize = () => {
+  let total = 0;
+  for (let key in localStorage) {
+    if (!localStorage.hasOwnProperty(key)) continue;
+    const value = localStorage.getItem(key);
+    total += key.length + (value ? value.length : 0);
+  }
+  return total;
+};
+
+
+const ExamListPage = ({ exams, onCreateNew, onSelectExam, onDeleteExam, onGeneratePDF }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredExams = exams.filter(exam => 
@@ -46,10 +67,44 @@ const ExamListPage = ({ exams, onCreateNew, onSelectExam, onDeleteExam }) => {
     }
   };
 
+    const usedBytes = getLocalStorageSize();
+  const usedPercent = ((usedBytes / MAX_STORAGE) * 100).toFixed(1);
+
   return (
     <div>
+
+       {/* STORAGE BAR */}
+      <div className="mb-6 p-4 bg-gray-100 border rounded-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <HardDrive className="w-5 h-5 text-gray-700" />
+          <span className="font-semibold text-gray-800">Storage Usage</span>
+        </div>
+
+        <div className="w-full bg-gray-300 h-3 rounded-full overflow-hidden mb-2">
+          <div
+            className={`h-3 rounded-full ${
+              usedPercent > 90 ? "bg-red-600" :
+              usedPercent > 70 ? "bg-orange-500" :
+              "bg-green-600"
+            }`}
+            style={{ width: `${usedPercent}%` }}
+          ></div>
+        </div>
+
+        <p className="text-sm text-gray-700">
+          {formatBytes(usedBytes)} used / {formatBytes(MAX_STORAGE)} ({usedPercent}%)
+        </p>
+
+        {usedPercent > 90 && (
+          <p className="text-red-600 text-sm mt-1 font-semibold">
+            Storage almost full. Delete some exams.
+          </p>
+        )}
+      </div>
+
+
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Your Exams</h2>
           <p className="text-gray-600">Manage multiple exam dates and sessions</p>
@@ -125,7 +180,7 @@ const ExamListPage = ({ exams, onCreateNew, onSelectExam, onDeleteExam }) => {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                <div className="flex justify-between items-center pt-4 border-t border-gray-200 flex-wrap gap-2">
                   <div className="flex gap-2">
                     <button
                       onClick={() => onSelectExam(exam.id)}
@@ -143,7 +198,7 @@ const ExamListPage = ({ exams, onCreateNew, onSelectExam, onDeleteExam }) => {
                   
                   {status === "ready" && (
                     <button
-                      onClick={() => onSelectExam(exam.id)}
+                      onClick={() => onGeneratePDF(exam.id)}
                       className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm font-medium"
                     >
                       Generate PDFs <ArrowRight className="w-3 h-3" />

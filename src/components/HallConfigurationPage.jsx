@@ -5,10 +5,11 @@ import { Plus, Minus, Users, ArrowLeft, ArrowRight, AlertCircle, CheckCircle } f
 const HallConfigurationPage = ({ exam, updateExam, onBack, onContinue }) => {
   const [halls, setHalls] = useState(exam.halls || []);
   const [capacityError, setCapacityError] = useState("");
-
+  const [editable, setEditable] = useState(exam.hallsEditable !== false);
   const totalStudents = exam.papers.reduce((sum, p) => sum + p.registerNumbers.length, 0);
   const suggestedHalls = Math.ceil(totalStudents / 30);
   const totalCapacity = halls.reduce((sum, hall) => sum + hall.strength, 0);
+  
 
   // Initialize halls if empty
   useEffect(() => {
@@ -71,9 +72,14 @@ const HallConfigurationPage = ({ exam, updateExam, onBack, onContinue }) => {
     onContinue();
   };
 
+  const handleEditableToggle = () => {
+    setEditable(!editable);
+    updateExam(exam.id, { hallsEditable: !editable });
+  }
+
   return (
     <div>
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb-6 flex justify-between items-center flex-wrap gap-4">
         <button
           onClick={onBack}
           className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
@@ -90,72 +96,112 @@ const HallConfigurationPage = ({ exam, updateExam, onBack, onContinue }) => {
       </div>
 
       <div className="bg-gray-50 border border-gray-300 rounded-xl p-6">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-4 flex-col sm:flex-row gap-4">
           <h2 className="text-xl font-bold text-gray-800">Hall Configuration</h2>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={adjustHallsToSuggestion}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-[11px] sm:text-medium font-medium "
             >
               <Users className="w-4 h-4" /> Auto Setup
             </button>
             <button
               onClick={addHall}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 font-medium"
+              className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 font-medium text-[11px] sm:text-medium "
             >
               <Plus className="w-4 h-4" /> Add Hall
             </button>
+            <button
+              onClick={handleEditableToggle}
+              className={`flex items-center gap-2 px-3 py-2 text-[11px] sm:text-medium rounded-md font-medium  ${editable ? "bg-yellow-600 text-white hover:bg-yellow-700" : "bg-green-600 text-white hover:bg-green-700"}`}
+            
+            >
+              {editable ? (<>
+                <Minus className="w-4 h-4" /> Lock Edits
+              </>) : (<>
+                <Plus className="w-4 h-4" /> Unlock Edits
+              </>)}
+            </button>
+
           </div>
+
         </div>
 
-        <div className="space-y-3 mb-4">
-          {halls.map((hall, index) => (
-            <div key={hall.id} className="flex items-center gap-3 p-3 bg-white border border-gray-300 rounded-lg">
-              <div className="flex items-center gap-2 w-16">
-                <span className="text-sm font-medium text-gray-700">Hall {index + 1}</span>
-              </div>
-              
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder={`Hall name (e.g., G-${23 + index})`}
-                  value={hall.name}
-                  onChange={(e) => updateHall(hall.id, 'name', e.target.value)}
-                  className="w-full border p-2 rounded text-sm"
-                />
-              </div>
-              
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Invigilator Name"
-                  value={hall.invigilator}
-                  onChange={(e) => updateHall(hall.id, 'invigilator', e.target.value)}
-                  className="w-full border p-2 rounded text-sm"
-                />
-              </div>
-              
-              <div className="w-24">
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Strength"
-                  value={hall.strength}
-                  onChange={(e) => updateHall(hall.id, 'strength', e.target.value)}
-                  className="w-full border p-2 rounded text-sm"
-                />
-              </div>
-              
-              <button
-                onClick={() => removeHall(hall.id)}
-                disabled={halls.length === 1}
-                className="p-2 text-gray-700 hover:text-gray-900 disabled:text-gray-400 disabled:cursor-not-allowed"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+       <div className="space-y-3 mb-4">
+  {halls.map((hall, index) => (
+    <div
+      key={hall.id}
+      className="p-3 bg-white border border-gray-300 rounded-lg"
+    >
+      {/* Top Label */}
+      <div className="mb-2">
+        <span className="text-sm font-medium text-gray-700">
+          Hall {index + 1}
+        </span>
+      </div>
+
+      {/* Form Row (responsive) */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center w-full">
+
+        {/* Hall Name */}
+        <div className="flex-1">
+          <input
+            disabled={!editable}
+            required
+            type="text"
+            placeholder={`Hall name (e.g., G-${23 + index})`}
+            value={hall.name}
+            onChange={(e) => updateHall(hall.id, "name", e.target.value)}
+            className="w-full border p-2 rounded text-sm disabled:bg-gray-100 border-gray-300"
+          />
         </div>
+
+        {/* Invigilator */}
+        <div className="flex-1">
+          <input
+            disabled={!editable}
+            type="text"
+            placeholder="Invigilator Name"
+            value={hall.invigilator}
+            onChange={(e) =>
+              updateHall(hall.id, "invigilator", e.target.value)
+            }
+            className="w-full border p-2 rounded text-sm disabled:bg-gray-100 border-gray-300"
+          />
+        </div>
+
+        {/* Strength + Delete button */}
+        <div className="flex items-center gap-2 sm:w-auto w-full">
+
+          <div className="w-24">
+            <input
+              disabled={!editable}
+              type="number"
+              min="1"
+              placeholder="Strength"
+              value={hall.strength}
+              onChange={(e) =>
+                updateHall(hall.id, "strength", e.target.value)
+              }
+              className="w-full border p-2 rounded text-sm disabled:bg-gray-100 border-gray-300"
+            />
+          </div>
+
+          <button
+            onClick={() => removeHall(hall.id)}
+            disabled={halls.length === 1}
+            className="p-2 text-gray-700 hover:text-gray-900 disabled:text-gray-400 disabled:cursor-not-allowed"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+
+        </div>
+
+      </div>
+    </div>
+  ))}
+</div>
+
 
         {/* Capacity Validation */}
         <div className="mb-4">
@@ -178,7 +224,7 @@ const HallConfigurationPage = ({ exam, updateExam, onBack, onContinue }) => {
           )}
         </div>
 
-        <div className="flex justify-between items-center pt-4 border-t border-gray-300">
+        <div className="flex justify-between items-center pt-4 border-t border-gray-300 flex-wrap gap-4">
           <div>
             <p className="text-gray-700">
               <strong>Current Capacity:</strong> {totalCapacity} seats across {halls.length} halls
@@ -187,8 +233,10 @@ const HallConfigurationPage = ({ exam, updateExam, onBack, onContinue }) => {
           
           <button
             onClick={handleContinue}
-            disabled={totalCapacity < totalStudents || halls.length === 0}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold ${
+            disabled={totalCapacity < totalStudents || halls.length === 0 || totalStudents === 0 || halls.some(hall => hall.name.trim() === "")}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold 
+              disabled:opacity-50 disabled:cursor-not-allowed
+              ${
               totalCapacity >= totalStudents && halls.length > 0
                 ? "bg-gray-800 text-white hover:bg-gray-900"
                 : "bg-gray-400 text-gray-200 cursor-not-allowed"

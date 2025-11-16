@@ -58,6 +58,11 @@ const App = () => {
     setCurrentPage("dateSelection");
   };
 
+  const generatePDF = (examId) => {
+    setCurrentExamId(examId);
+    setCurrentPage("fileManagement");
+  }
+
   const renderPage = () => {
     switch (currentPage) {
       case "examList":
@@ -66,6 +71,7 @@ const App = () => {
             exams={exams}
             onCreateNew={createNewExam}
             onSelectExam={selectExam}
+            onGeneratePDF={generatePDF}
             onDeleteExam={deleteExam}
           />
         );
@@ -104,14 +110,14 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 sm:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        <div className="bg-white sm:rounded-2xl shadow-lg p-4 sm:p-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
             <div className="flex items-center gap-3">
               <FileText className="w-8 h-8 text-gray-800" />
-              <h1 className="text-3xl font-bold text-gray-800">
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-800">
                 Exam Hall Management
               </h1>
             </div>
@@ -128,7 +134,7 @@ const App = () => {
 
           {/* Navigation Breadcrumbs */}
           {currentPage !== "examList" && (
-            <div className="flex items-center gap-2 mb-6 text-sm text-gray-600">
+            <div className="flex items-center gap-2 mb-6 text-sm text-gray-600 flex-wrap gap-2">
               <button 
                 onClick={() => setCurrentPage("examList")}
                 className="px-3 py-1 rounded hover:bg-gray-100"
