@@ -758,7 +758,7 @@ const PDFGenerator = ({ examData }) => {
 
       autoTable(doc, {
         startY: currentY,
-        head: [[examData?.isRnbb ? "RNBB" : "SL", "NAME OF SUBJECT", "COUNT"]],
+        head: [["SL", "NAME OF SUBJECT", "COUNT"]],
         body: paperCountData,
         styles: {
           fontSize: 9,
