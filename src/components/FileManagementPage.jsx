@@ -23,6 +23,10 @@ const FileManagementPage = ({ exam, updateExam, onBack, onEditHalls }) => {
     updateExam({ ...exam, files: newFiles });
   };
 
+  const checkMismatch = (paperDate, paperSession) => {
+    return paperDate !== exam.date || paperSession !== exam.session;
+  };
+
   return (
     <div>
       <div className="mb-6 flex justify-between items-center flex-col md:flex-row gap-4">
@@ -89,9 +93,9 @@ const FileManagementPage = ({ exam, updateExam, onBack, onEditHalls }) => {
 
             {files.length === 0 && (
               <>
-                <p className="text-gray-600 text-center py-4">
+                {/* <p className="text-gray-600 text-center py-4">
                   File upload functionality is not available now.
-                </p>
+                </p> */}
 
                 {exam && exam.papers && exam.papers.length > 0 && (
                   <div className="space-y-4">
@@ -100,9 +104,44 @@ const FileManagementPage = ({ exam, updateExam, onBack, onEditHalls }) => {
                         key={index}
                         className="text-gray-700 bg-gray-100 p-4 rounded-lg border"
                       >
+                        <div className="font-semibold mb-2">
+                          Paper {index + 1}
+                          {/* delete feature */}
+                          <button
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "Are you sure you want to delete this paper?"
+                                )
+                              ) {
+                                const updatedPapers = exam.papers.filter(
+                                  (_, i) => i !== index
+                                );
+                                updateExam(exam.id, { papers: updatedPapers });
+                              }
+                            }}
+                            className="ml-4 px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
                         <p className="font-semibold">Paper: {p.course}</p>
-                        <p>
-                          Date: {exam.date} {exam.session}
+                        <p
+                          className={`
+                    ${
+                      checkMismatch(p.extractedDateTime, p.extractedSession)
+                        ? "text-red-600"
+                        : "text-gray-800"
+                    }
+                    `}
+                        >
+                          Date: {p.extractedDateTime} {p.extractedSession}
+                          <span>
+                            {p.extractedDateTime == null &&
+                            p.extractedSession == null
+                              ? "Date and session not available is it manual ? then fine"
+                              : ""}
+                          </span>
                         </p>
                         <p>Total Students: {p.registerNumbers.length}</p>
                       </div>

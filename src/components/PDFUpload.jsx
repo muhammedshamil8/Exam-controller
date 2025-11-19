@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -12,7 +12,13 @@ import {
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
+const PDFUpload = ({
+  papers,
+  onPapersUpdate,
+  selectedDate,
+  session,
+  onValidationError,
+}) => {
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -279,20 +285,34 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
               severity: "warning",
             });
           }
+          data.extractedSession = extractedSession;
         }
 
-        const formattedDate = selectedDate
-          ? selectedDate.split("-").reverse().join("-")
-          : "";
-        data.dateTime = `${formattedDate} ${session}`;
+        // const formattedDate = selectedDate
+        //   ? selectedDate.split("-").reverse().join("-")
+        //   : "";
+        // data.dateTime = `${formattedDate} ${session}`;
+        const extracted = data.dateTime;
+
+        const onlyDate = extracted.split(" ")[0];
+        const normalized = onlyDate.replace(/[./]/g, "-");
+        const parts = normalized.split("-");
+        const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+
+        data.extractedDateTime = formattedDate;
 
         results.push(data);
       }
 
       const consistencyWarnings = validateDateTimeConsistency(results);
       setDateTimeWarnings([...warnings, ...consistencyWarnings]);
+      if (warnings.length > 0 || consistencyWarnings.length > 0) {
+        onValidationError(true); // BLOCK parent
+      } else {
+        onValidationError(false); // CLEAR error
+      }
 
-      onPapersUpdate(results);
+      onPapersUpdate([...(papers || []), ...results]);
       setSuccess(true);
       setFiles([]);
     } catch (err) {
@@ -302,6 +322,14 @@ const PDFUpload = ({ papers, onPapersUpdate, selectedDate, session }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (papers.length === 0) {
+      setDateTimeWarnings([]);
+      setError("");
+      setSuccess(false);
+    }
+  }, [papers]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

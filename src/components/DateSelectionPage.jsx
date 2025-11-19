@@ -1,5 +1,5 @@
 // components/DateSelectionPage.js
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import PDFUpload from "./PDFUpload";
 import ManualInput from "./ManualInput";
 import {
@@ -21,8 +21,10 @@ const DateSelectionPage = ({
 }) => {
   const [mode, setMode] = useState("upload");
   const [selectedDate, setSelectedDate] = useState(exam?.date || "");
+  const [isRnbb, setIsRnbb] = useState(exam?.isRnbb || false);
   const [session, setSession] = useState(exam?.session || "FN");
   const [showFilesList, setShowFilesList] = useState(false);
+  const [hasValidationError, setHasValidationError] = useState(false);
 
   const handleDateSubmit = () => {
     if (!selectedDate) {
@@ -32,6 +34,7 @@ const DateSelectionPage = ({
     updateExam(exam.id, {
       date: selectedDate,
       session: session,
+      isRnbb: isRnbb,
       name: `Exam ${new Date(selectedDate).toLocaleDateString()} ${session}`,
     });
   };
@@ -40,7 +43,7 @@ const DateSelectionPage = ({
     updateExam(exam.id, { papers });
   };
 
-  const canContinue = exam?.papers?.length > 0 && exam?.date;
+  const canContinue = exam?.papers?.length > 0 && exam?.date ;
 
   const clearAll = () => {
     if (window.confirm("Are you sure you want to clear all papers?")) {
@@ -50,6 +53,32 @@ const DateSelectionPage = ({
 
   const toggleFilesList = () => {
     setShowFilesList(!showFilesList);
+  };
+
+  useEffect(() => {
+    // console.log("Exam updated:", exam);
+    setShowFilesList(true);
+    checkErrors();
+  }, [exam]);
+
+  const checkErrors = () => {
+    let hasError = false;
+    if (exam && exam.papers) {
+      for (let paper of exam.papers) {
+        if (paper.extractedDateTime == null || paper.extractedSession == null) {
+          continue; // Skip if data is incomplete
+        }
+        if (checkMismatch(paper?.extractedDateTime, paper?.extractedSession)) {
+          hasError = true;
+          break;
+        }
+      }
+    }
+    setHasValidationError(hasError);
+  };
+
+  const checkMismatch = (paperDate, paperSession) => {
+    return paperDate !== exam.date || paperSession !== exam.session;
   };
 
   return (
@@ -115,6 +144,19 @@ const DateSelectionPage = ({
               <option value="AN">Afternoon (AN)</option>
             </select>
           </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="rnbbCheckbox"
+              checked={isRnbb}
+              onChange={(e) => setIsRnbb(e.target.checked)}
+              className="w-4 h-4 text-gray-600 border-gray-300 rounded"
+            />
+            <label htmlFor="rnbbCheckbox" className="text-gray-700 font-medium">
+              Is RNBB Exam?
+            </label>
+          </div>
         </div>
 
         <button
@@ -172,6 +214,7 @@ const DateSelectionPage = ({
             onPapersUpdate={handlePapersUpdate}
             selectedDate={selectedDate}
             session={session}
+            onValidationError={(err) => setHasValidationError(err)}
           />
         ) : (
           <ManualInput
@@ -179,6 +222,7 @@ const DateSelectionPage = ({
             onPapersUpdate={handlePapersUpdate}
             selectedDate={selectedDate}
             session={session}
+            onValidationError={(err) => setHasValidationError(err)}
           />
         )}
       </div>
@@ -189,16 +233,27 @@ const DateSelectionPage = ({
 
         <button
           onClick={onContinue}
-          disabled={!canContinue || !selectedDate || exam?.papers?.length === 0}
-          className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold ${
-            canContinue
-              ? "bg-gray-800 text-white hover:bg-gray-900"
-              : "bg-gray-400 text-gray-200 cursor-not-allowed"
-          }`}
+          disabled={
+            !canContinue ||
+            !selectedDate ||
+            exam?.papers?.length === 0 ||
+            hasValidationError // ← ADD THIS
+          }
+          className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold 
+             cursor-pointer bg-gray-800 text-white hover:bg-gray-900
+            disabled:opacity-50 disabled:cursor-not-allowed
+           `}
         >
           Continue to Hall Setup <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
+      {hasValidationError && (
+  <div className="mb-4 p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg">
+    ⚠ Fix date/session mismatches before continuing.
+  </div>
+)}
+
 
       {/* Summary */}
       {exam?.papers?.length > 0 && (
@@ -232,9 +287,9 @@ const DateSelectionPage = ({
       {/* File Upload Unavailable Notice */}
       {showFilesList && (
         <div className="mb-6 p-6 bg-gray-50 border border-gray-300 rounded-lg mt-6">
-          <p className="text-gray-600 text-center py-4">
+          {/* <p className="text-gray-600 text-center py-4">
             uploaded File show functionality is not available now.
-          </p>
+          </p> */}
           {exam && exam.papers && exam.papers.length > 0 && (
             <div className="space-y-4">
               {exam.papers.map((p, index) => (
@@ -242,9 +297,34 @@ const DateSelectionPage = ({
                   key={index}
                   className="text-gray-700 bg-gray-100 p-4 rounded-lg border"
                 >
+                  <div className="font-semibold mb-2">
+                    Paper {index + 1}
+                    {/* delete feature */}
+                    <button
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Are you sure you want to delete this paper?"
+                          )
+                        ) {
+                          const updatedPapers = exam.papers.filter(
+                            (_, i) => i !== index
+                          );
+                          updateExam(exam.id, { papers: updatedPapers });
+                        }
+                      }}
+                      className="ml-4 px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
                   <p className="font-semibold">Paper: {p.course}</p>
-                  <p>
-                    Date: {exam.date} {exam.session}
+                  <p
+                    className={`
+                    ${checkMismatch(p.extractedDateTime, p.extractedSession) ? "text-red-600" : "text-gray-800"}
+                    `}>
+                    Date: {p.extractedDateTime} {p.extractedSession} 
+                    <span>{p.extractedDateTime == null && p.extractedSession == null ? "Date and session not available is it manual ? then fine" : ""}</span>
                   </p>
                   <p>Total Students: {p.registerNumbers.length}</p>
                 </div>

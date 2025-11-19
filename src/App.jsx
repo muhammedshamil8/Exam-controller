@@ -28,6 +28,7 @@ const App = () => {
       id: Date.now().toString(),
       name: `Exam ${exams.length + 1}`,
       date: "",
+      isRnbb: false,
       session: "FN", // FN or AN
       papers: [],
       halls: [],

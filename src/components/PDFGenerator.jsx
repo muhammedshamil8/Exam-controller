@@ -30,6 +30,7 @@ const PDFGenerator = ({ examData }) => {
   const [seatArrangementData, setSeatArrangementData] = useState([]);
   const [capacityError, setCapacityError] = useState("");
   const [warnNoHalls, setWarnNoHalls] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   // ADD MISSING FUNCTION
   const buildSubjectsFromPapers = () =>
@@ -37,235 +38,242 @@ const PDFGenerator = ({ examData }) => {
       subjectName: p.course || `Paper-${papers.indexOf(p) + 1}`,
       count: p.registerNumbers.length,
       registerNumbers: p.registerNumbers,
-  }));
+    }));
 
   // ----------------- FIXED: Maintain Original Order Distribution Logic -------------------
   const distributeStudentsFlexible = (subjects, hallList) => {
-  const distributionRows = [];
-  const hallUsage = hallList.map((hall) => ({
-    hall: hall,
-    remaining: hall.strength,
-    papers: {},
-    students: [],
-    paperDistribution: {},
-  }));
+    const distributionRows = [];
+    const hallUsage = hallList.map((hall) => ({
+      hall: hall,
+      remaining: hall.strength,
+      papers: {},
+      students: [],
+      paperDistribution: {},
+    }));
 
-  let slCounter = 1;
+    let slCounter = 1;
 
-  const studentPools = subjects.map((subject) => ({
-    subjectName: subject.subjectName,
-    students: subject.registerNumbers.map((regNo, i) => ({
-      id: `${subject.subjectName}-${i + 1}`,
-      subject: subject.subjectName,
-      registerNumber: regNo,
-      originalIndex: i,
-      rnbb: `RNBB${i + 1}`,
-    })),
-    distributed: 0,
-    total: subject.registerNumbers.length,
-  }));
+    const studentPools = subjects.map((subject) => ({
+      subjectName: subject.subjectName,
+      students: subject.registerNumbers.map((regNo, i) => ({
+        id: `${subject.subjectName}-${i + 1}`,
+        subject: subject.subjectName,
+        registerNumber: regNo,
+        originalIndex: i,
+        rnbb: `RNBB${i + 1}`,
+      })),
+      distributed: 0,
+      total: subject.registerNumbers.length,
+    }));
 
-  let hallIndex = 0;
+    let hallIndex = 0;
 
-  while (
-    studentPools.some((pool) => pool.students.length > 0) &&
-    hallIndex < hallUsage.length
-  ) {
-    const currentHall = hallUsage[hallIndex];
+    while (
+      studentPools.some((pool) => pool.students.length > 0) &&
+      hallIndex < hallUsage.length
+    ) {
+      const currentHall = hallUsage[hallIndex];
 
-    if (currentHall.remaining <= 0) {
-      hallIndex++;
-      continue;
-    }
-
-    const availablePools = studentPools.filter((p) => p.students.length > 0);
-    if (availablePools.length === 0) {
-      hallIndex++;
-      continue;
-    }
-
-    const S = currentHall.hall.strength;
-    const target = Math.floor(S / 2); // first paper target
-    let remainingSeats = Math.min(currentHall.remaining, S);
-
-    // pick the first available pool (respecting subjects order)
-    const firstPoolIndex = studentPools.findIndex((p) => p.students.length > 0);
-    if (firstPoolIndex === -1) {
-      hallIndex++;
-      continue;
-    }
-
-    const usedPapersThisHall = []; // track papers used and counts for warning
-    // --- Allocate from first paper ---
-    const firstPool = studentPools[firstPoolIndex];
-    const takeFromFirst = Math.min(firstPool.students.length, target, remainingSeats);
-
-    if (takeFromFirst > 0) {
-      const studentsTaken = firstPool.students.splice(0, takeFromFirst);
-      remainingSeats -= studentsTaken.length;
-      firstPool.distributed += studentsTaken.length;
-
-      // record distribution row
-      const existingRowIndex = distributionRows.findIndex(
-        (row) => row.subjectName === firstPool.subjectName && row.room === currentHall.hall.name
-      );
-
-      if (existingRowIndex !== -1) {
-        distributionRows[existingRowIndex].count += studentsTaken.length;
-        distributionRows[existingRowIndex].students.push(...studentsTaken);
-      } else {
-        distributionRows.push({
-          sl: slCounter++,
-          subjectName: firstPool.subjectName,
-          count: studentsTaken.length,
-          room: currentHall.hall.name || `HALL-${hallIndex + 1}`,
-          students: studentsTaken,
-        });
-      }
-
-      currentHall.students.push(...studentsTaken);
-      currentHall.papers[firstPool.subjectName] =
-        (currentHall.papers[firstPool.subjectName] || 0) + studentsTaken.length;
-      if (!currentHall.paperDistribution[firstPool.subjectName]) {
-        currentHall.paperDistribution[firstPool.subjectName] = [];
-      }
-      currentHall.paperDistribution[firstPool.subjectName].push(...studentsTaken);
-
-      usedPapersThisHall.push(firstPool.subjectName);
-    }
-
-    // --- Allocate from second pool (preferred) and subsequent if needed ---
-    let poolIdx = firstPoolIndex + 1;
-    // second preferred max is target (same as first). But if target === 0 (small halls) allow fill.
-    while (remainingSeats > 0 && poolIdx < studentPools.length) {
-      const pool = studentPools[poolIdx];
-      if (!pool || pool.students.length === 0) {
-        poolIdx++;
+      if (currentHall.remaining <= 0) {
+        hallIndex++;
         continue;
       }
 
-      // For the preferred second pool try to give up to `target`, but also respect remainingSeats.
-      // For third+ pools, allow them to contribute but cap per-pool at target as well,
-      // except if remainingSeats < target we take what's needed.
-      const cap = Math.max(1, target); // ensure at least 1 allowed if target is 0
-      const take = Math.min(pool.students.length, remainingSeats, cap);
-
-      if (take <= 0) {
-        poolIdx++;
+      const availablePools = studentPools.filter((p) => p.students.length > 0);
+      if (availablePools.length === 0) {
+        hallIndex++;
         continue;
       }
 
-      const studentsTaken = pool.students.splice(0, take);
-      remainingSeats -= studentsTaken.length;
-      pool.distributed += studentsTaken.length;
+      const S = currentHall.hall.strength;
+      const target = Math.floor(S / 2); // first paper target
+      let remainingSeats = Math.min(currentHall.remaining, S);
 
-      // record distribution row
-      const existingRowIndex = distributionRows.findIndex(
-        (row) => row.subjectName === pool.subjectName && row.room === currentHall.hall.name
+      // pick the first available pool (respecting subjects order)
+      const firstPoolIndex = studentPools.findIndex(
+        (p) => p.students.length > 0
+      );
+      if (firstPoolIndex === -1) {
+        hallIndex++;
+        continue;
+      }
+
+      const usedPapersThisHall = []; // track papers used and counts for warning
+      // --- Allocate from first paper ---
+      const firstPool = studentPools[firstPoolIndex];
+      const takeFromFirst = Math.min(
+        firstPool.students.length,
+        target,
+        remainingSeats
       );
 
-      if (existingRowIndex !== -1) {
-        distributionRows[existingRowIndex].count += studentsTaken.length;
-        distributionRows[existingRowIndex].students.push(...studentsTaken);
-      } else {
-        distributionRows.push({
-          sl: slCounter++,
-          subjectName: pool.subjectName,
-          count: studentsTaken.length,
-          room: currentHall.hall.name || `HALL-${hallIndex + 1}`,
-          students: studentsTaken,
-        });
-      }
+      if (takeFromFirst > 0) {
+        const studentsTaken = firstPool.students.splice(0, takeFromFirst);
+        remainingSeats -= studentsTaken.length;
+        firstPool.distributed += studentsTaken.length;
 
-      currentHall.students.push(...studentsTaken);
-      currentHall.papers[pool.subjectName] =
-        (currentHall.papers[pool.subjectName] || 0) + studentsTaken.length;
-      if (!currentHall.paperDistribution[pool.subjectName]) {
-        currentHall.paperDistribution[pool.subjectName] = [];
-      }
-      currentHall.paperDistribution[pool.subjectName].push(...studentsTaken);
+        // record distribution row
+        const existingRowIndex = distributionRows.findIndex(
+          (row) =>
+            row.subjectName === firstPool.subjectName &&
+            row.room === currentHall.hall.name
+        );
 
-      if (!usedPapersThisHall.includes(pool.subjectName)) {
-        usedPapersThisHall.push(pool.subjectName);
-      }
-
-      // move to next pool only if still need seats
-      if (remainingSeats > 0) poolIdx++;
-    }
-
-    // If after trying successive pools we still have remainingSeats but there are no more pools,
-    // then hall remains partially filled and we move on.
-    currentHall.remaining -= (S - remainingSeats); // seats filled = S - remainingSeats
-    // ensure non-negative
-    if (currentHall.remaining < 0) currentHall.remaining = 0;
-
-    // mark warning if more than 2 papers ended up in this hall
-    if (usedPapersThisHall.length > 2) {
-      // find distribution rows for this room and mark them with warning
-      distributionRows.forEach((r) => {
-        if (r.room === (currentHall.hall.name || `HALL-${hallIndex + 1}`) && usedPapersThisHall.includes(r.subjectName)) {
-          r._warning = true;
+        if (existingRowIndex !== -1) {
+          distributionRows[existingRowIndex].count += studentsTaken.length;
+          distributionRows[existingRowIndex].students.push(...studentsTaken);
+        } else {
+          distributionRows.push({
+            sl: slCounter++,
+            subjectName: firstPool.subjectName,
+            count: studentsTaken.length,
+            room: currentHall.hall.name || `HALL-${hallIndex + 1}`,
+            students: studentsTaken,
+          });
         }
-      });
-    }
 
-    // move to next hall if full or no more available pools can fill it
-    if (currentHall.remaining <= 0) {
-      hallIndex++;
-    } else {
-      // if there are still students but we couldn't fill more from any pool (rare),
-      // move to next hall to try distribute others
-      const stillHasMovable = studentPools.some((p) => p.students.length > 0);
-      if (!stillHasMovable) {
+        currentHall.students.push(...studentsTaken);
+        currentHall.papers[firstPool.subjectName] =
+          (currentHall.papers[firstPool.subjectName] || 0) +
+          studentsTaken.length;
+        if (!currentHall.paperDistribution[firstPool.subjectName]) {
+          currentHall.paperDistribution[firstPool.subjectName] = [];
+        }
+        currentHall.paperDistribution[firstPool.subjectName].push(
+          ...studentsTaken
+        );
+
+        usedPapersThisHall.push(firstPool.subjectName);
+      }
+
+      // --- Allocate from second pool (preferred) and subsequent if needed ---
+      let poolIdx = firstPoolIndex + 1;
+      // second preferred max is target (same as first). But if target === 0 (small halls) allow fill.
+      while (remainingSeats > 0 && poolIdx < studentPools.length) {
+        const pool = studentPools[poolIdx];
+        if (!pool || pool.students.length === 0) {
+          poolIdx++;
+          continue;
+        }
+
+        // For the preferred second pool try to give up to `target`, but also respect remainingSeats.
+        // For third+ pools, allow them to contribute but cap per-pool at target as well,
+        // except if remainingSeats < target we take what's needed.
+        const cap = Math.max(1, target); // ensure at least 1 allowed if target is 0
+        const take = Math.min(pool.students.length, remainingSeats, cap);
+
+        if (take <= 0) {
+          poolIdx++;
+          continue;
+        }
+
+        const studentsTaken = pool.students.splice(0, take);
+        remainingSeats -= studentsTaken.length;
+        pool.distributed += studentsTaken.length;
+
+        // record distribution row
+        const existingRowIndex = distributionRows.findIndex(
+          (row) =>
+            row.subjectName === pool.subjectName &&
+            row.room === currentHall.hall.name
+        );
+
+        if (existingRowIndex !== -1) {
+          distributionRows[existingRowIndex].count += studentsTaken.length;
+          distributionRows[existingRowIndex].students.push(...studentsTaken);
+        } else {
+          distributionRows.push({
+            sl: slCounter++,
+            subjectName: pool.subjectName,
+            count: studentsTaken.length,
+            room: currentHall.hall.name || `HALL-${hallIndex + 1}`,
+            students: studentsTaken,
+          });
+        }
+
+        currentHall.students.push(...studentsTaken);
+        currentHall.papers[pool.subjectName] =
+          (currentHall.papers[pool.subjectName] || 0) + studentsTaken.length;
+        if (!currentHall.paperDistribution[pool.subjectName]) {
+          currentHall.paperDistribution[pool.subjectName] = [];
+        }
+        currentHall.paperDistribution[pool.subjectName].push(...studentsTaken);
+
+        if (!usedPapersThisHall.includes(pool.subjectName)) {
+          usedPapersThisHall.push(pool.subjectName);
+        }
+
+        // move to next pool only if still need seats
+        if (remainingSeats > 0) poolIdx++;
+      }
+
+      // If after trying successive pools we still have remainingSeats but there are no more pools,
+      // then hall remains partially filled and we move on.
+      currentHall.remaining -= S - remainingSeats; // seats filled = S - remainingSeats
+      // ensure non-negative
+      if (currentHall.remaining < 0) currentHall.remaining = 0;
+
+      // mark warning if more than 2 papers ended up in this hall
+      if (usedPapersThisHall.length > 2) {
+        // find distribution rows for this room and mark them with warning
+        distributionRows.forEach((r) => {
+          if (
+            r.room === (currentHall.hall.name || `HALL-${hallIndex + 1}`) &&
+            usedPapersThisHall.includes(r.subjectName)
+          ) {
+            r._warning = true;
+          }
+        });
+      }
+
+      // move to next hall if full or no more available pools can fill it
+      if (currentHall.remaining <= 0) {
         hallIndex++;
       } else {
-        // if current hall still has capacity but next pools are empty, move on to next hall
-        const nextAvailable = studentPools.findIndex((p) => p.students.length > 0);
-        if (nextAvailable === -1) hallIndex++;
-        else {
-          // if next available is before firstPoolIndex (unlikely), continue same hall; else move on
-          if (nextAvailable <= firstPoolIndex) {
-            // try again same hall (this rarely happens)
-          } else {
-            // continue trying same hall only if we still have pools after firstPoolIndex
-            const anyAfter = studentPools.slice(firstPoolIndex + 1).some((p) => p.students.length > 0);
-            if (!anyAfter) hallIndex++;
+        // if there are still students but we couldn't fill more from any pool (rare),
+        // move to next hall to try distribute others
+        const stillHasMovable = studentPools.some((p) => p.students.length > 0);
+        if (!stillHasMovable) {
+          hallIndex++;
+        } else {
+          // if current hall still has capacity but next pools are empty, move on to next hall
+          const nextAvailable = studentPools.findIndex(
+            (p) => p.students.length > 0
+          );
+          if (nextAvailable === -1) hallIndex++;
+          else {
+            // if next available is before firstPoolIndex (unlikely), continue same hall; else move on
+            if (nextAvailable <= firstPoolIndex) {
+              // try again same hall (this rarely happens)
+            } else {
+              // continue trying same hall only if we still have pools after firstPoolIndex
+              const anyAfter = studentPools
+                .slice(firstPoolIndex + 1)
+                .some((p) => p.students.length > 0);
+              if (!anyAfter) hallIndex++;
+            }
           }
         }
       }
-    }
-  } // end while
+    } // end while
 
-  // any leftover students -> UNASSIGNED
-  studentPools.forEach((pool) => {
-    if (pool.students.length > 0) {
-      distributionRows.push({
-        sl: slCounter++,
-        subjectName: pool.subjectName,
-        count: pool.students.length,
-        room: "UNASSIGNED - NO HALLS LEFT",
-        students: pool.students,
-        _warning: true,
-      });
-    }
-  });
-
-  // sort students inside each hall and per paperDistribution as before
-  hallUsage.forEach((usage) => {
-    usage.students.sort((a, b) => {
-      const prefixA = a.registerNumber.replace(/\d+$/, "");
-      const prefixB = b.registerNumber.replace(/\d+$/, "");
-      const numA = parseInt(a.registerNumber.replace(prefixA, "")) || 0;
-      const numB = parseInt(b.registerNumber.replace(prefixB, "")) || 0;
-
-      if (prefixA !== prefixB) {
-        return prefixA.localeCompare(prefixB);
+    // any leftover students -> UNASSIGNED
+    studentPools.forEach((pool) => {
+      if (pool.students.length > 0) {
+        distributionRows.push({
+          sl: slCounter++,
+          subjectName: pool.subjectName,
+          count: pool.students.length,
+          room: "UNASSIGNED - NO HALLS LEFT",
+          students: pool.students,
+          _warning: true,
+        });
       }
-      return numA - numB;
     });
 
-    Object.values(usage.paperDistribution).forEach((students) => {
-      students.sort((a, b) => {
+    // sort students inside each hall and per paperDistribution as before
+    hallUsage.forEach((usage) => {
+      usage.students.sort((a, b) => {
         const prefixA = a.registerNumber.replace(/\d+$/, "");
         const prefixB = b.registerNumber.replace(/\d+$/, "");
         const numA = parseInt(a.registerNumber.replace(prefixA, "")) || 0;
@@ -276,43 +284,57 @@ const PDFGenerator = ({ examData }) => {
         }
         return numA - numB;
       });
+
+      Object.values(usage.paperDistribution).forEach((students) => {
+        students.sort((a, b) => {
+          const prefixA = a.registerNumber.replace(/\d+$/, "");
+          const prefixB = b.registerNumber.replace(/\d+$/, "");
+          const numA = parseInt(a.registerNumber.replace(prefixA, "")) || 0;
+          const numB = parseInt(b.registerNumber.replace(prefixB, "")) || 0;
+
+          if (prefixA !== prefixB) {
+            return prefixA.localeCompare(prefixB);
+          }
+          return numA - numB;
+        });
+      });
     });
-  });
 
-  const previewData = hallUsage.map((usage, index) => ({
-    hall: usage.hall.name || `HALL-${index + 1}`,
-    invigilator: usage.hall.invigilator || "",
-    papers: Object.entries(usage.papers).map(([paper, count]) => ({
-      paper,
-      count,
-      percentage: Math.round((count / usage.hall.strength) * 100),
-    })),
-    paperDistribution: usage.paperDistribution,
-    remaining: usage.remaining,
-    utilization: Math.round(((usage.hall.strength - usage.remaining) / usage.hall.strength) * 100),
-    paperCount: Object.keys(usage.papers).length,
-    students: usage.students,
-  }));
-
-  const seatData = hallUsage
-    .map((usage, index) => ({
-      sl: index + 1,
-      room: usage.hall.name || `HALL-${index + 1}`,
+    const previewData = hallUsage.map((usage, index) => ({
+      hall: usage.hall.name || `HALL-${index + 1}`,
+      invigilator: usage.hall.invigilator || "",
+      papers: Object.entries(usage.papers).map(([paper, count]) => ({
+        paper,
+        count,
+        percentage: Math.round((count / usage.hall.strength) * 100),
+      })),
+      paperDistribution: usage.paperDistribution,
+      remaining: usage.remaining,
+      utilization: Math.round(
+        ((usage.hall.strength - usage.remaining) / usage.hall.strength) * 100
+      ),
+      paperCount: Object.keys(usage.papers).length,
       students: usage.students,
-      totalStudents: usage.hall.strength - usage.remaining,
-    }))
-    .filter((hall) => hall.totalStudents > 0);
+    }));
 
-  const ranOut = distributionRows.some((r) => r._warning);
-  return {
-    distributionRows,
-    ranOut,
-    hallUsage: hallUsage.map((h) => h.remaining),
-    previewData,
-    seatArrangementData: seatData,
+    const seatData = hallUsage
+      .map((usage, index) => ({
+        sl: index + 1,
+        room: usage.hall.name || `HALL-${index + 1}`,
+        students: usage.students,
+        totalStudents: usage.hall.strength - usage.remaining,
+      }))
+      .filter((hall) => hall.totalStudents > 0);
+
+    const ranOut = distributionRows.some((r) => r._warning);
+    return {
+      distributionRows,
+      ranOut,
+      hallUsage: hallUsage.map((h) => h.remaining),
+      previewData,
+      seatArrangementData: seatData,
+    };
   };
-};
-
 
   // ----------------- FIXED: Format Register Numbers for Display -------------------
   const formatRegisterNumbers = (students) => {
@@ -736,7 +758,7 @@ const PDFGenerator = ({ examData }) => {
 
       autoTable(doc, {
         startY: currentY,
-        head: [["SL", "NAME OF SUBJECT", "COUNT"]],
+        head: [[examData?.isRnbb ? "RNBB" : "SL", "NAME OF SUBJECT", "COUNT"]],
         body: paperCountData,
         styles: {
           fontSize: 9,
@@ -794,8 +816,7 @@ const PDFGenerator = ({ examData }) => {
 
           sortedStudents.forEach((student, studentIndex) => {
             allStudents.push([
-              // `RNBB${globalRnbbCounter}`,
-              `${globalRnbbCounter}`,
+              examData?.isRnbb ? `RNBB${globalRnbbCounter}` : `${globalRnbbCounter}`,
               student.registerNumber,
               studentIndex === 0 ? paper : '"',
               "",
@@ -810,7 +831,7 @@ const PDFGenerator = ({ examData }) => {
 
       autoTable(doc, {
         startY: currentY,
-        head: [["SL", "REG NO", "SUBJECT NAME", "SIGNATURE"]],
+        head: [[examData?.isRnbb ? "RNBB" : "SL", "REG NO", "SUBJECT NAME", "SIGNATURE"]],
         body: allStudents,
         styles: {
           fontSize: 8,
@@ -879,21 +900,13 @@ const PDFGenerator = ({ examData }) => {
     // Header - Centered with better spacing
     doc.setFontSize(18);
     doc.setFont(undefined, "bold");
-    doc.text(
-      "SEAT ARRANGEMENT",
-      pageWidth / 2,
-      currentY,
-      { align: "center" }
-    );
+    doc.text("SEAT ARRANGEMENT", pageWidth / 2, currentY, { align: "center" });
     currentY += 20;
 
     doc.setFontSize(14);
-    doc.text(
-      "UNIVERSITY EXAMINATION",
-      pageWidth / 2,
-      currentY,
-      { align: "center" }
-    );
+    doc.text("UNIVERSITY EXAMINATION", pageWidth / 2, currentY, {
+      align: "center",
+    });
     currentY += 30;
 
     // Exam details with better formatting
@@ -905,8 +918,11 @@ const PDFGenerator = ({ examData }) => {
     });
     currentY += 8;
     // currentY += 8;
-    
-    const totalStudents = seatArrangementData.reduce((sum, hall) => sum + hall.students.length, 0);
+
+    const totalStudents = seatArrangementData.reduce(
+      (sum, hall) => sum + hall.students.length,
+      0
+    );
     // doc.text(`Total Students: ${totalStudents}`, pageWidth / 2, currentY, {
     //   align: "center",
     // });
@@ -957,11 +973,11 @@ const PDFGenerator = ({ examData }) => {
         // Footer with page numbers
         const pageCount = doc.internal.getNumberOfPages();
         const page = doc.internal.getCurrentPageInfo().pageNumber;
-        
+
         doc.setFontSize(9);
         doc.setFont(undefined, "normal");
         doc.setTextColor(100, 100, 100);
-        
+
         // Page number centered at bottom
         doc.text(
           `Page ${page} of ${pageCount}`,
@@ -969,14 +985,10 @@ const PDFGenerator = ({ examData }) => {
           pageHeight - 25,
           { align: "center" }
         );
-        
+
         // Generation date on left
-        const today = new Date().toLocaleDateString('en-GB');
-        doc.text(
-          `Generated: ${today}`,
-          30,
-          pageHeight - 25
-        );
+        const today = new Date().toLocaleDateString("en-GB");
+        doc.text(`Generated: ${today}`, 30, pageHeight - 25);
       },
     });
 
@@ -986,6 +998,31 @@ const PDFGenerator = ({ examData }) => {
   // FIX THE DISABLED CONDITION
   const isGenerateDisabled =
     totalCapacity < totalStudents || halls.length === 0 || totalStudents === 0;
+
+  useEffect(() => {
+    // console.log("Exam updated:", examData);
+    checkErrors();
+  }, [examData]);
+
+  const checkErrors = () => {
+    let hasError = false;
+    if (examData && examData.papers) {
+      for (let paper of examData.papers) {
+        if (paper.extractedDateTime == null || paper.extractedSession == null) {
+          continue; // Skip if data is incomplete
+        }
+        if (checkMismatch(paper?.extractedDateTime, paper?.extractedSession)) {
+          hasError = true;
+          break;
+        }
+      }
+    }
+    setIsError(hasError);
+  };
+
+    const checkMismatch = (paperDate, paperSession) => {
+    return paperDate !== examData.date || paperSession !== examData.session;
+  };
 
   return (
     <div className="bg-gray-50 border border-gray-300 rounded-xl p-6">
@@ -1015,11 +1052,20 @@ const PDFGenerator = ({ examData }) => {
       </div>
 
       <button
+        disabled={isError}
         onClick={previewDistribution}
-        className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium mb-4"
+        className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium mb-4
+        disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed
+        "
       >
         <Users className="w-4 h-4" /> Preview Distribution
       </button>
+
+          {isError && (
+  <div className="mb-4 p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg">
+    ⚠ Fix date/session mismatches before continuing.
+  </div>
+)}
       {/* i mean hall name and invigilator name alert message */}
       <div className="mb-4">
         {distributionPreview.some((hall) => hall.hall.startsWith("HALL-")) && (
@@ -1031,7 +1077,7 @@ const PDFGenerator = ({ examData }) => {
         )}
       </div>
 
-  <div className="flex gap-2 justify-end mb-4 flex-col md:flex-row">
+      <div className="flex gap-2 justify-end mb-4 flex-col md:flex-row">
         <button
           onClick={generateQuestionPaperDistributionPDF}
           disabled={distributionPreview.length === 0}
@@ -1146,8 +1192,6 @@ const PDFGenerator = ({ examData }) => {
           </div>
         )}
       </div>
-
-    
     </div>
   );
 };
