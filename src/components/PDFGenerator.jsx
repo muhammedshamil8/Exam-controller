@@ -1052,7 +1052,7 @@ const PDFGenerator = ({ examData }) => {
       </div>
 
       <button
-        disabled={isError}
+        // disabled={isError}
         onClick={previewDistribution}
         className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium mb-4
         disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed

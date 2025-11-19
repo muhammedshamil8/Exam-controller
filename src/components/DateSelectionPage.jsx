@@ -236,8 +236,8 @@ const DateSelectionPage = ({
           disabled={
             !canContinue ||
             !selectedDate ||
-            exam?.papers?.length === 0 ||
-            hasValidationError // ← ADD THIS
+            exam?.papers?.length === 0 
+            // hasValidationError // ← ADD THIS
           }
           className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold 
              cursor-pointer bg-gray-800 text-white hover:bg-gray-900
@@ -249,7 +249,7 @@ const DateSelectionPage = ({
       </div>
 
       {hasValidationError && (
-  <div className="mb-4 p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg">
+  <div className="my-3 p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg">
     ⚠ Fix date/session mismatches before continuing.
   </div>
 )}
