@@ -56,7 +56,7 @@ const DateSelectionPage = ({
   };
 
   useEffect(() => {
-    // console.log("Exam updated:", exam);
+    console.log("Exam updated:", exam);
     setShowFilesList(true);
     checkErrors();
   }, [exam]);
@@ -65,6 +65,7 @@ const DateSelectionPage = ({
     let hasError = false;
     if (exam && exam.papers) {
       for (let paper of exam.papers) {
+        // console.log("Checking paper:", paper);
         if (paper.extractedDateTime == null || paper.extractedSession == null) {
           continue; // Skip if data is incomplete
         }
@@ -78,6 +79,7 @@ const DateSelectionPage = ({
   };
 
   const checkMismatch = (paperDate, paperSession) => {
+    // console.log("Checking mismatch for paperDate:", paperDate, "paperSession:", paperSession, "examDate:", exam.date, "examSession:", exam.session);
     return paperDate !== exam.date || paperSession !== exam.session;
   };
 
