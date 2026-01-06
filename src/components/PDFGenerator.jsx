@@ -1065,115 +1065,107 @@ const PDFGenerator = ({ examData }) => {
   };
 
   // ----------------- RNBB Stickers PDF -------------------
-const generateRnbbStickersPDF = () => {
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "pt",
-    format: "a4",
-  });
+  const generateRnbbStickersPDF = () => {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "a4",
+    });
 
-  /* ======================
+    /* ======================
      GRID (LOCKED)
   ====================== */
-  const ROWS = 13;
-  const COLS = 5;
+    const ROWS = 13;
+    const COLS = 5;
 
-  const ROW_HEIGHT = 58;   // row gap stays (important)
-  const COL_GAP = 18;
+    const ROW_HEIGHT = 58;
+    const COL_GAP = 18;
 
-  const marginX = 28;
-  const marginY = 34;
+    const marginX = 28;
+    const marginY = 34;
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const usableWidth = pageWidth - marginX * 2;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const usableWidth = pageWidth - marginX * 2;
 
-  const colWidth =
-    (usableWidth - COL_GAP * (COLS - 1)) / COLS;
+    const colWidth = (usableWidth - COL_GAP * (COLS - 1)) / COLS;
 
-  /* ======================
+    /* ======================
      BUILD STICKERS
   ====================== */
-  const stickers = [];
-  let rnbbCounter = 1;
+    const stickers = [];
+    let rnbbCounter = 1;
 
-  const pushStudents = (papers, halls) => {
-    halls.forEach((hall) => {
-      papers.forEach((paper) => {
-        paper.registerNumbers.forEach((regNo) => {
-          stickers.push({
-            regNo,
-            hall: hall.name,
-            rnbb: `RNBB${rnbbCounter++}`,
-            date: examData.date,
-            session: examData.session,
+    const pushStudents = (papers, halls) => {
+      halls.forEach((hall) => {
+        papers.forEach((paper) => {
+          paper.registerNumbers.forEach((regNo) => {
+            stickers.push({
+              regNo,
+              hall: hall.name,
+              rnbb: `RNBB${rnbbCounter++}`,
+              date: examData.date,
+              session: examData.session,
+            });
           });
         });
       });
-    });
-  };
+    };
 
-  pushStudents(regPapers, regHalls);
-  if (hasSDE) pushStudents(sdePapers, sdeHalls);
+    pushStudents(regPapers, regHalls);
+    if (hasSDE) pushStudents(sdePapers, sdeHalls);
 
-  /* ======================
+    /* ======================
      DRAW
   ====================== */
-  let index = 0;
+    let index = 0;
 
-  while (index < stickers.length) {
-    let y = marginY;
+    while (index < stickers.length) {
+      let y = marginY;
 
-    for (let r = 0; r < ROWS; r++) {
-      let x = marginX;
+      for (let r = 0; r < ROWS; r++) {
+        let x = marginX;
 
-      for (let c = 0; c < COLS; c++) {
-        if (index >= stickers.length) break;
+        for (let c = 0; c < COLS; c++) {
+          if (index >= stickers.length) break;
 
-        const s = stickers[index];
-        const centerX = x + colWidth / 2;
+          const s = stickers[index];
+          const centerX = x + colWidth / 2;
 
-        // --- Register Number (MEDIUM ~500 EFFECT) ---
-        doc.setFont("Helvetica", "semibold");
-        doc.setFontSize(10); // bigger, but spacing controls weight feel
-        doc.text(s.regNo, centerX, y, { align: "center" });
+          // --- Register Number (CONTROLLED BOLD) ---
+          doc.setFont("Times", "bold");
+          doc.setFontSize(9.8); // slightly reduced to avoid heavy look
+          doc.text(s.regNo, centerX, y, { align: "center" });
 
-        // --- Hall + RNBB ---
-        doc.setFont("Helvetica", "normal");
-        doc.setFontSize(8.2);
-        doc.text(
-          `R: ${s.hall} - ${s.rnbb}`,
-          centerX,
-          y + 12,
-          { align: "center" }
-        );
+          // --- Hall + RNBB ---
+          doc.setFont("Times", "normal");
+          doc.setFontSize(8.2);
+          doc.text(`R: ${s.hall} - ${s.rnbb}`, centerX, y + 12, {
+            align: "center",
+          });
 
-        // --- Date + Session ---
-        doc.text(
-          `${s.date} , ${s.session}`,
-          centerX,
-          y + 22,
-          { align: "center" }
-        );
+          // --- Date + Session ---
+          doc.text(`${s.date} , ${s.session}`, centerX, y + 22, {
+            align: "center",
+          });
 
-        x += colWidth + COL_GAP;
-        index++;
+          x += colWidth + COL_GAP;
+          index++;
+        }
+
+        y += ROW_HEIGHT;
       }
 
-      y += ROW_HEIGHT; // row gap preserved
+      if (index < stickers.length) doc.addPage();
     }
 
-    if (index < stickers.length) doc.addPage();
-  }
-
-  /* ======================
+    /* ======================
      FILE NAME
   ====================== */
-  const exportDate = formatDateForFile(examData.date);
-  const exportTime = formatExportTime();
+    const exportDate = formatDateForFile(examData.date);
+    const exportTime = formatExportTime();
 
-  doc.save(`RNBB-Stickers-${exportDate}_${exportTime}.pdf`);
-};
-
+    doc.save(`RNBB-Stickers-${exportDate}_${exportTime}.pdf`);
+  };
 
   // FIX THE DISABLED CONDITION
   const isGenerateDisabled =
