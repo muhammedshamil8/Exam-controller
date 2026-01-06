@@ -24,36 +24,71 @@ const normalizeText = (text) =>
     .replace(/\s*-\s*/g, "-")
     .trim();
 
-const detectExamModel = (text) => {
-  const system = text.includes("FYUG")
-    ? "FYUG"
-    : text.includes("CBCSS")
-    ? "CBCSS"
-    : "UNKNOWN";
-
-  if (system === "UNKNOWN") {
-    throw new Error("Unsupported exam format");
-  }
-
-  const level =
-    system === "CBCSS" && text.includes("CBCSS-PG")
-      ? "PG"
-      : system === "CBCSS"
-      ? "UG"
-      : "FYUG";
-
-  const category = system === "CBCSS" && text.includes("SDE") ? "SDE" : "REG";
-
-  return { system, level, category };
+const detectExamType = (text) => {
+  const upper = text.toUpperCase();
+  return upper.includes("DISTANCE") || upper.includes("SDE") ? "SDE" : "REG";
 };
 
-const extractDateTime = (text) => {
-  const dateMatch = text.match(/\b(\d{2}[.\-/]\d{2}[.\-/]\d{4})\b/);
-  const timeMatch = text.match(/\b(\d{1,2}:\d{2}\s*[AP]M)\b/i);
+const detectLevel = (text) => {
+  const upper = text.toUpperCase();
 
-  if (!dateMatch) return "";
+  if (
+    upper.includes("MSC") ||
+    upper.includes("MCOM") ||
+    upper.includes("MA") ||
+    upper.includes("PG")
+  ) {
+    return "PG";
+  }
 
-  return `${dateMatch[1]} ${timeMatch?.[1] || ""}`.trim();
+  if (
+    upper.includes("BA") ||
+    upper.includes("BSC") ||
+    upper.includes("BCOM") ||
+    upper.includes("UG")
+  ) {
+    return "UG";
+  }
+
+  return "UNKNOWN";
+};
+
+const detectSystem = (text) => {
+  const upper = text.toUpperCase();
+
+  if (upper.includes("FYUG")) return "FYUG";
+  if (upper.includes("CBCSS")) return "CBCSS";
+  if (upper.includes("DISTANCE")) return "DISTANCE";
+
+  return "UNKNOWN";
+};
+
+const detectExamModel = (text) => {
+  return {
+    exam_type: detectExamType(text),
+    level: detectLevel(text),
+    system: detectSystem(text),
+  };
+};
+
+const extractDateAndSession = (text) => {
+  const dateMatch = text.match(/(\d{2})\s*[.\-/]\s*(\d{2})\s*[.\-/]\s*(\d{4})/);
+
+  if (!dateMatch) {
+    return { date: "", session: "" };
+  }
+
+  const [, dd, mm, yyyy] = dateMatch;
+  const date = `${yyyy}-${mm}-${dd}`; // ISO format
+
+  // Detect session from AM / PM
+  const upper = text.toUpperCase();
+  let session = "";
+
+  if (upper.includes("AM")) session = "FN";
+  else if (upper.includes("PM")) session = "AN";
+
+  return { date, session };
 };
 
 const extractCourseOrPaper = (text, system) => {
@@ -77,11 +112,12 @@ const extractRegisterNumbers = (text) => {
 const extractDataFromText = (rawText) => {
   const text = normalizeText(rawText);
   const model = detectExamModel(text);
-
+  const { date, session } = extractDateAndSession(text);
   return {
     ...model,
     course: extractCourseOrPaper(text, model.system),
-    dateTime: extractDateTime(text),
+    extractedDateTime: date,
+    extractedSession: session,
     registerNumbers: extractRegisterNumbers(text),
     fileName: "",
   };
@@ -121,7 +157,23 @@ const PDFUpload = ({
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  const normalizeDate = (d) => d.replace(/[./]/g, "-");
+  const toISODate = (input) => {
+    if (!input) return "";
+    const clean = input.split(" ")[0].replace(/[./]/g, "-");
+
+    // If already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+      return clean;
+    }
+
+    // If DD-MM-YYYY
+    if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) {
+      const [dd, mm, yyyy] = clean.split("-");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    return "";
+  };
 
   const handleSubmit = async () => {
     if (!files.length) return;
@@ -149,18 +201,15 @@ const PDFUpload = ({
         const data = extractDataFromText(fullText);
         data.fileName = f.name;
 
-        // ✅ DATE MISMATCH CHECK (HERE)
-        if (selectedDate && data.dateTime) {
-          const pdfDate = normalizeDate(data.dateTime);
-          const selected = normalizeDate(selectedDate);
+        // console.log("Extracted data from", selectedDate, data.extractedDateTime, f.name);
 
-          if (!pdfDate.includes(selected)) {
-            warnings.push({
-              type: "date-mismatch",
-              message: `Date mismatch in "${f.name}"`,
-              severity: "warning",
-            });
-          }
+        // ✅ DATE MISMATCH CHECK (HERE)
+        if (selectedDate && data.extractedDateTime && selectedDate !== data.extractedDateTime) {
+          warnings.push({
+            type: "date-mismatch",
+            message: `Date mismatch in "${f.name}"`,
+            severity: "warning",
+          });
         }
 
         results.push(data);

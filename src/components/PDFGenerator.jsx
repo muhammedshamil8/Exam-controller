@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Download,
+  Tag,
   ClipboardList,
   Armchair as Chair,
   AlertCircle,
@@ -12,19 +13,49 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const PDFGenerator = ({ examData }) => {
-  const { papers, halls } = examData;
+  // ---------- SAFE BASE ----------
+  const papers = Array.isArray(examData?.papers) ? examData.papers : [];
+  const halls = examData?.halls || { REG: [], SDE: [] };
 
-  useEffect(() => {
-    console.log("Papers:", papers);
-    console.log("Halls:", halls);
-  }, [papers, halls]);
+  // ---------- SPLIT (ONCE ONLY) ----------
+  const regPapers = papers.filter((p) => p.exam_type === "REG");
+  const sdePapers = papers.filter((p) => p.exam_type === "SDE");
 
-  // CALCULATE MISSING VARIABLES
-  const totalStudents = papers.reduce(
-    (sum, paper) => sum + paper.registerNumbers.length,
+  const regHalls = Array.isArray(halls.REG) ? halls.REG : [];
+  const sdeHalls = Array.isArray(halls.SDE) ? halls.SDE : [];
+
+  const hasSDE = sdePapers.length > 0;
+
+  // ---------- STUDENT COUNT ----------
+  const regStudents = regPapers.reduce(
+    (sum, p) => sum + (p.registerNumbers?.length || 0),
     0
   );
-  const totalCapacity = halls.reduce((sum, hall) => sum + hall.strength, 0);
+
+  const sdeStudents = sdePapers.reduce(
+    (sum, p) => sum + (p.registerNumbers?.length || 0),
+    0
+  );
+
+  // ---------- HALL COUNT ----------
+  const regHallCount = regHalls.length;
+  const sdeHallCount = sdeHalls.length;
+
+  // ---------- CAPACITY ----------
+  const regCapacity = regHalls.reduce(
+    (sum, h) => sum + (Number(h.strength) || 0),
+    0
+  );
+
+  const sdeCapacity = sdeHalls.reduce(
+    (sum, h) => sum + (Number(h.strength) || 0),
+    0
+  );
+
+  // ---------- TOTALS (DERIVED ONLY) ----------
+  const totalStudents = regStudents + sdeStudents;
+  const totalHalls = regHallCount + sdeHallCount;
+  const totalCapacity = regCapacity + sdeCapacity;
 
   const [distributionPreview, setDistributionPreview] = useState([]);
   const [seatArrangementData, setSeatArrangementData] = useState([]);
@@ -445,34 +476,109 @@ const PDFGenerator = ({ examData }) => {
   };
 
   const previewDistribution = () => {
-    const validHalls = halls
-      .map((hall, index) => ({
-        ...hall,
-        name: hall.name.trim() || `HALL-${index + 1}`,
-      }))
-      .filter((hall) => hall.strength > 0);
+    setWarnNoHalls(false);
+    setCapacityError("");
 
-    if (validHalls.length === 0) {
+    // ---------- PREPARE HALLS (PER TYPE) ----------
+    const prepareHalls = (hallList) =>
+      hallList
+        .map((hall, index) => ({
+          ...hall,
+          name: hall.name?.trim() || `HALL-${index + 1}`,
+        }))
+        .filter((hall) => Number(hall.strength) > 0);
+
+    const regValidHalls = prepareHalls(regHalls);
+    const sdeValidHalls = prepareHalls(sdeHalls);
+
+    // ---------- HARD VALIDATION ----------
+    if (regStudents > 0 && regValidHalls.length === 0) {
       setWarnNoHalls(true);
-      setCapacityError("Please add at least one hall with positive strength");
+      setCapacityError(
+        "Please add at least one REG hall with positive strength"
+      );
       return;
     }
 
-    const subjects = buildSubjectsFromPapers();
-    const { previewData, seatArrangementData } = distributeStudentsFlexible(
-      subjects,
-      validHalls
-    );
-    setDistributionPreview(previewData);
-    setSeatArrangementData(seatArrangementData);
+    if (hasSDE && sdeStudents > 0 && sdeValidHalls.length === 0) {
+      setWarnNoHalls(true);
+      setCapacityError(
+        "Please add at least one SDE hall with positive strength"
+      );
+      return;
+    }
+
+    // ---------- BUILD SUBJECTS ----------
+    const buildSubjects = (paperList) =>
+      paperList.map((p) => ({
+        subjectName: p.course,
+        count: p.registerNumbers.length,
+        registerNumbers: p.registerNumbers,
+      }));
+
+    let combinedPreview = [];
+    let combinedSeatData = [];
+
+    // ---------- REG DISTRIBUTION ----------
+    if (regStudents > 0) {
+      const regSubjects = buildSubjects(regPapers);
+      const regResult = distributeStudentsFlexible(regSubjects, regValidHalls);
+
+      combinedPreview = combinedPreview.concat(regResult.previewData);
+      combinedSeatData = combinedSeatData.concat(regResult.seatArrangementData);
+    }
+
+    // ---------- SDE DISTRIBUTION ----------
+    if (hasSDE && sdeStudents > 0) {
+      const sdeSubjects = buildSubjects(sdePapers);
+      const sdeResult = distributeStudentsFlexible(sdeSubjects, sdeValidHalls);
+
+      combinedPreview = combinedPreview.concat(sdeResult.previewData);
+      combinedSeatData = combinedSeatData.concat(sdeResult.seatArrangementData);
+    }
+
+    // ---------- UPDATE STATE ----------
+    setDistributionPreview(combinedPreview);
+    setSeatArrangementData(combinedSeatData);
+
+    // RNBB stickers depend on preview being ready
+    generateRnbbStickersPDF();
+
     setWarnNoHalls(false);
     setCapacityError("");
+  };
+
+  const formatDateForFile = (dateStr) => {
+    if (!dateStr) return "unknown-date";
+
+    const clean = dateStr.replace(/[./]/g, "-");
+
+    if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) {
+      const [dd, mm, yyyy] = clean.split("-");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+      return clean;
+    }
+
+    return "unknown-date";
+  };
+
+  const formatExportTime = () => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+
+    return `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(
+      now.getSeconds()
+    )}`;
   };
 
   const generatePDF = () => {
     setWarnNoHalls(false);
     setCapacityError("");
 
+    // ---------- HARD VALIDATION ----------
     if (totalCapacity < totalStudents) {
       setCapacityError(
         `Cannot generate PDF: Insufficient capacity! Need ${
@@ -482,72 +588,94 @@ const PDFGenerator = ({ examData }) => {
       return;
     }
 
-    const validHalls = halls
-      .map((hall, index) => ({
-        ...hall,
-        name: hall.name.trim() || `HALL-${index + 1}`,
-      }))
-      .filter((hall) => hall.strength > 0);
+    // ---------- PREPARE VALID HALLS (PER TYPE) ----------
+    const prepareHalls = (hallList) =>
+      hallList
+        .map((hall, index) => ({
+          ...hall,
+          name: hall.name?.trim() || `HALL-${index + 1}`,
+        }))
+        .filter((hall) => Number(hall.strength) > 0);
 
-    if (validHalls.length === 0) {
+    const regValidHalls = prepareHalls(regHalls);
+    const sdeValidHalls = prepareHalls(sdeHalls);
+
+    if (regValidHalls.length === 0 && regStudents > 0) {
       setWarnNoHalls(true);
-      setCapacityError("Please add at least one hall with positive strength");
+      setCapacityError("No valid REG halls found");
       return;
     }
 
-    const subjects = buildSubjectsFromPapers();
-    const { distributionRows, ranOut } = distributeStudentsFlexible(
-      subjects,
-      validHalls
-    );
-
-    if (ranOut) {
+    if (hasSDE && sdeValidHalls.length === 0 && sdeStudents > 0) {
       setWarnNoHalls(true);
+      setCapacityError("No valid SDE halls found");
+      return;
     }
 
-    // Create PDF
+    // ---------- BUILD SUBJECTS (PER TYPE) ----------
+    const buildSubjects = (paperList) =>
+      paperList.map((p) => ({
+        subjectName: p.course,
+        count: p.registerNumbers.length,
+        registerNumbers: p.registerNumbers,
+      }));
+
+    const regSubjects = buildSubjects(regPapers);
+    const sdeSubjects = buildSubjects(sdePapers);
+
+    // ---------- DISTRIBUTE (REG FIRST, THEN SDE) ----------
+    const regResult =
+      regStudents > 0
+        ? distributeStudentsFlexible(regSubjects, regValidHalls)
+        : null;
+
+    const sdeResult =
+      hasSDE && sdeStudents > 0
+        ? distributeStudentsFlexible(sdeSubjects, sdeValidHalls)
+        : null;
+
+    // ---------- CREATE PDF ----------
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "pt",
       format: "a4",
     });
 
+    const pageWidth = doc.internal.pageSize.getWidth();
     let currentY = 40;
 
-    // Header - Centered
+    // ---------- HEADER ----------
     doc.setFontSize(16);
-    const pageWidth = doc.internal.pageSize.getWidth();
     doc.text("EXAM SUMMARY - TO: EXAM CHIEF", pageWidth / 2, currentY, {
       align: "center",
     });
     currentY += 25;
 
     doc.setFontSize(12);
-    const examDate = papers[0]?.dateTime || "04-11-2025 FN";
+    const examDate = regPapers[0]?.dateTime || "N/A";
     doc.text(`Date of Exam : ${examDate}`, pageWidth / 2, currentY, {
       align: "center",
     });
     currentY += 30;
 
-    // Summary Table
+    // ---------- SUMMARY TABLE ----------
     autoTable(doc, {
       startY: currentY,
       head: [["", "Count"]],
       body: [
-        ["Total Number of Students :", totalStudents],
-        ["Total Number of Halls :", validHalls.length],
+        ["REG Students", regStudents],
+        ["REG Halls", regValidHalls.length],
+        ...(hasSDE
+          ? [
+              ["SDE Students", sdeStudents],
+              ["SDE Halls", sdeValidHalls.length],
+            ]
+          : []),
+        ["Total Students", totalStudents],
+        ["Total Halls", regValidHalls.length + sdeValidHalls.length],
       ],
       styles: {
         fontSize: 10,
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-      },
-      headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        fontStyle: "bold",
         lineColor: [0, 0, 0],
         lineWidth: 0.5,
       },
@@ -556,125 +684,172 @@ const PDFGenerator = ({ examData }) => {
 
     currentY = doc.lastAutoTable.finalY + 25;
 
-    // INVIGILATION AND ROOM DETAILS
-    doc.setFontSize(14);
-    doc.text("INVIGILATION AND ROOM DETAILS", pageWidth / 2, currentY, {
-      align: "center",
-    });
-    currentY += 20;
+    // ---------- HELPER TO DRAW DISTRIBUTION ----------
+    const drawDistribution = (title, result) => {
+      if (!result) return;
 
-    const invigilationData = validHalls.map((hall, index) => [
-      index + 1,
-      hall.invigilator || "",
-      hall.name,
-      hall.strength,
-    ]);
+      doc.setFontSize(14);
+      doc.text(title, pageWidth / 2, currentY, { align: "center" });
+      currentY += 20;
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [["HALL", "NAME OF INVIGILATOR", "ROOM", "STRENGTH"]],
-      body: invigilationData,
-      styles: {
-        fontSize: 9,
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-      },
-      headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        fontStyle: "bold",
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-      },
-      margin: { left: 40, right: 40 },
-    });
+      const data = result.distributionRows.map((row) => [
+        row.sl,
+        row.subjectName,
+        row.count,
+        row.room,
+      ]);
 
-    currentY = doc.lastAutoTable.finalY + 25;
+      autoTable(doc, {
+        startY: currentY,
+        head: [["SL", "SUBJECT NAME", "COUNT", "ROOM"]],
+        body: data,
+        styles: {
+          fontSize: 9,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.5,
+        },
+        margin: { left: 40, right: 40 },
+      });
 
-    // QUESTION PAPERS TO BE PRINTED
-    doc.setFontSize(14);
-    doc.text("QUESTION PAPERS TO BE PRINTED", pageWidth / 2, currentY, {
-      align: "center",
-    });
-    currentY += 20;
+      currentY = doc.lastAutoTable.finalY + 30;
+    };
 
-    const papersData = subjects.map((subject, index) => [
-      index + 1,
-      subject.subjectName,
-      subject.count,
-    ]);
+    // ---------- REG SECTION ----------
+    drawDistribution("REG QUESTION PAPER DISTRIBUTION", regResult);
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [["SL", "SUBJECT NAME", "COUNT"]],
-      body: papersData,
-      styles: {
-        fontSize: 9,
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-      },
-      headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        fontStyle: "bold",
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-      },
-      margin: { left: 40, right: 40 },
-    });
+    // ---------- SDE SECTION ----------
+    if (hasSDE) {
+      drawDistribution("SDE QUESTION PAPER DISTRIBUTION", sdeResult);
+    }
 
-    currentY = doc.lastAutoTable.finalY + 25;
-
-    // QUESTION PAPER DISTRIBUTION TABLE
-    doc.setFontSize(14);
-    doc.text("QUESTION PAPER DISTRIBUTION TABLE", pageWidth / 2, currentY, {
-      align: "center",
-    });
-    currentY += 20;
-
-    const distributionData = distributionRows.map((row) => [
-      row.sl,
-      row.subjectName,
-      row.count,
-      row.room,
-    ]);
-
-    autoTable(doc, {
-      startY: currentY,
-      head: [["SL", "SUBJECT NAME", "COUNT", "ROOM"]],
-      body: distributionData,
-      styles: {
-        fontSize: 9,
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-      },
-      headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        fontStyle: "bold",
-        lineColor: [0, 0, 0],
-        lineWidth: 0.5,
-      },
-      margin: { left: 40, right: 40 },
-      didDrawPage: (data) => {
-        const pageCount = doc.internal.getNumberOfPages();
-        const page = doc.internal.getCurrentPageInfo().pageNumber;
-        doc.setFontSize(8);
-        doc.text(
-          `Page ${page} of ${pageCount}`,
-          doc.internal.pageSize.getWidth() - 80,
-          doc.internal.pageSize.getHeight() - 20
-        );
-      },
-    });
+    // ---------- FOOTER ----------
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        pageWidth - 80,
+        doc.internal.pageSize.getHeight() - 20
+      );
+    }
 
     doc.save("exam-summary-distribution.pdf");
+  };
+
+  // ----------------- FIXED: Seat Arrangement PDF Generation -------------------
+  const generateSeatArrangementPDF = () => {
+    if (seatArrangementData.length === 0) {
+      alert("Please generate distribution first using the Preview button");
+      return;
+    }
+
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "a4",
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let currentY = 50;
+
+    // Header - Centered with better spacing
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
+    doc.text("SEAT ARRANGEMENT", pageWidth / 2, currentY, { align: "center" });
+    currentY += 20;
+
+    doc.setFontSize(14);
+    doc.text("UNIVERSITY EXAMINATION", pageWidth / 2, currentY, {
+      align: "center",
+    });
+    currentY += 30;
+
+    // Exam details with better formatting
+    doc.setFontSize(11);
+    doc.setFont(undefined, "normal");
+    const examDate = papers[0]?.dateTime || "04-11-2025 FN";
+    doc.text(`Date of Examination: ${examDate}`, pageWidth / 2, currentY, {
+      align: "center",
+    });
+    currentY += 8;
+    // currentY += 8;
+
+    const totalStudents = seatArrangementData.reduce(
+      (sum, hall) => sum + hall.students.length,
+      0
+    );
+    // doc.text(`Total Students: ${totalStudents}`, pageWidth / 2, currentY, {
+    //   align: "center",
+    // });
+    currentY += 25;
+
+    // Seat Arrangement Table with improved styling
+    const seatData = seatArrangementData.map((hall) => {
+      const rangeDisplay = formatRegisterNumbers(hall.students);
+      const regList = formatRegisterNumbersList(hall.students);
+
+      return [hall.sl, hall.room, rangeDisplay, regList];
+    });
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [["SL", "ROOM", "REG NO RANGE", "REGISTER NUMBERS"]],
+      body: seatData,
+      styles: {
+        fontSize: 9,
+        fillColor: [255, 255, 255],
+        textColor: [40, 40, 40],
+        lineColor: [100, 100, 100],
+        lineWidth: 0.75,
+        cellPadding: 6,
+        valign: "middle",
+        halign: "left",
+      },
+      headStyles: {
+        fillColor: [240, 240, 240],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        lineColor: [100, 100, 100],
+        lineWidth: 0.75,
+        fontSize: 10,
+        cellPadding: 8,
+      },
+      columnStyles: {
+        0: { cellWidth: 35, halign: "center" }, // SL
+        1: { cellWidth: 80, halign: "center" }, // ROOM
+        2: { cellWidth: 140 }, // REG NO RANGE
+        3: { cellWidth: 275 }, // REG NOS
+      },
+      margin: { left: 30, right: 30, top: 50, bottom: 40 },
+      alternateRowStyles: {
+        fillColor: [250, 250, 250],
+      },
+      didDrawPage: (data) => {
+        // Footer with page numbers
+        const pageCount = doc.internal.getNumberOfPages();
+        const page = doc.internal.getCurrentPageInfo().pageNumber;
+
+        doc.setFontSize(9);
+        doc.setFont(undefined, "normal");
+        doc.setTextColor(100, 100, 100);
+
+        // Page number centered at bottom
+        doc.text(
+          `Page ${page} of ${pageCount}`,
+          pageWidth / 2,
+          pageHeight - 25,
+          { align: "center" }
+        );
+
+        // Generation date on left
+        const today = new Date().toLocaleDateString("en-GB");
+        doc.text(`Generated: ${today}`, 30, pageHeight - 25);
+      },
+    });
+
+    doc.save("seat-arrangement.pdf");
   };
 
   // ----------------- FIXED: Question Paper Distribution PDF (Invigilator Format) -------------------
@@ -816,7 +991,9 @@ const PDFGenerator = ({ examData }) => {
 
           sortedStudents.forEach((student, studentIndex) => {
             allStudents.push([
-              examData?.isRnbb ? `RNBB${globalRnbbCounter}` : `${globalRnbbCounter}`,
+              examData?.isRnbb
+                ? `RNBB${globalRnbbCounter}`
+                : `${globalRnbbCounter}`,
               student.registerNumber,
               studentIndex === 0 ? paper : '"',
               "",
@@ -831,7 +1008,14 @@ const PDFGenerator = ({ examData }) => {
 
       autoTable(doc, {
         startY: currentY,
-        head: [[examData?.isRnbb ? "RNBB" : "SL", "REG NO", "SUBJECT NAME", "SIGNATURE"]],
+        head: [
+          [
+            examData?.isRnbb ? "RNBB" : "SL",
+            "REG NO",
+            "SUBJECT NAME",
+            "SIGNATURE",
+          ],
+        ],
         body: allStudents,
         styles: {
           fontSize: 8,
@@ -880,120 +1064,116 @@ const PDFGenerator = ({ examData }) => {
     doc.save("question-paper-distribution-invigilator.pdf");
   };
 
-  // ----------------- FIXED: Seat Arrangement PDF Generation -------------------
-  const generateSeatArrangementPDF = () => {
-    if (seatArrangementData.length === 0) {
-      alert("Please generate distribution first using the Preview button");
-      return;
-    }
+  // ----------------- RNBB Stickers PDF -------------------
+const generateRnbbStickersPDF = () => {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "pt",
+    format: "a4",
+  });
 
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "a4",
+  /* ======================
+     GRID (LOCKED)
+  ====================== */
+  const ROWS = 13;
+  const COLS = 5;
+
+  const ROW_HEIGHT = 58;   // row gap stays (important)
+  const COL_GAP = 18;
+
+  const marginX = 28;
+  const marginY = 34;
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const usableWidth = pageWidth - marginX * 2;
+
+  const colWidth =
+    (usableWidth - COL_GAP * (COLS - 1)) / COLS;
+
+  /* ======================
+     BUILD STICKERS
+  ====================== */
+  const stickers = [];
+  let rnbbCounter = 1;
+
+  const pushStudents = (papers, halls) => {
+    halls.forEach((hall) => {
+      papers.forEach((paper) => {
+        paper.registerNumbers.forEach((regNo) => {
+          stickers.push({
+            regNo,
+            hall: hall.name,
+            rnbb: `RNBB${rnbbCounter++}`,
+            date: examData.date,
+            session: examData.session,
+          });
+        });
+      });
     });
+  };
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    let currentY = 50;
+  pushStudents(regPapers, regHalls);
+  if (hasSDE) pushStudents(sdePapers, sdeHalls);
 
-    // Header - Centered with better spacing
-    doc.setFontSize(18);
-    doc.setFont(undefined, "bold");
-    doc.text("SEAT ARRANGEMENT", pageWidth / 2, currentY, { align: "center" });
-    currentY += 20;
+  /* ======================
+     DRAW
+  ====================== */
+  let index = 0;
 
-    doc.setFontSize(14);
-    doc.text("UNIVERSITY EXAMINATION", pageWidth / 2, currentY, {
-      align: "center",
-    });
-    currentY += 30;
+  while (index < stickers.length) {
+    let y = marginY;
 
-    // Exam details with better formatting
-    doc.setFontSize(11);
-    doc.setFont(undefined, "normal");
-    const examDate = papers[0]?.dateTime || "04-11-2025 FN";
-    doc.text(`Date of Examination: ${examDate}`, pageWidth / 2, currentY, {
-      align: "center",
-    });
-    currentY += 8;
-    // currentY += 8;
+    for (let r = 0; r < ROWS; r++) {
+      let x = marginX;
 
-    const totalStudents = seatArrangementData.reduce(
-      (sum, hall) => sum + hall.students.length,
-      0
-    );
-    // doc.text(`Total Students: ${totalStudents}`, pageWidth / 2, currentY, {
-    //   align: "center",
-    // });
-    currentY += 25;
+      for (let c = 0; c < COLS; c++) {
+        if (index >= stickers.length) break;
 
-    // Seat Arrangement Table with improved styling
-    const seatData = seatArrangementData.map((hall) => {
-      const rangeDisplay = formatRegisterNumbers(hall.students);
-      const regList = formatRegisterNumbersList(hall.students);
+        const s = stickers[index];
+        const centerX = x + colWidth / 2;
 
-      return [hall.sl, hall.room, rangeDisplay, regList];
-    });
+        // --- Register Number (MEDIUM ~500 EFFECT) ---
+        doc.setFont("Helvetica", "semibold");
+        doc.setFontSize(10); // bigger, but spacing controls weight feel
+        doc.text(s.regNo, centerX, y, { align: "center" });
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [["SL", "ROOM", "REG NO RANGE", "REGISTER NUMBERS"]],
-      body: seatData,
-      styles: {
-        fontSize: 9,
-        fillColor: [255, 255, 255],
-        textColor: [40, 40, 40],
-        lineColor: [100, 100, 100],
-        lineWidth: 0.75,
-        cellPadding: 6,
-        valign: "middle",
-        halign: "left",
-      },
-      headStyles: {
-        fillColor: [240, 240, 240],
-        textColor: [0, 0, 0],
-        fontStyle: "bold",
-        lineColor: [100, 100, 100],
-        lineWidth: 0.75,
-        fontSize: 10,
-        cellPadding: 8,
-      },
-      columnStyles: {
-        0: { cellWidth: 35, halign: "center" }, // SL
-        1: { cellWidth: 80, halign: "center" }, // ROOM
-        2: { cellWidth: 140 }, // REG NO RANGE
-        3: { cellWidth: 275 }, // REG NOS
-      },
-      margin: { left: 30, right: 30, top: 50, bottom: 40 },
-      alternateRowStyles: {
-        fillColor: [250, 250, 250],
-      },
-      didDrawPage: (data) => {
-        // Footer with page numbers
-        const pageCount = doc.internal.getNumberOfPages();
-        const page = doc.internal.getCurrentPageInfo().pageNumber;
-
-        doc.setFontSize(9);
-        doc.setFont(undefined, "normal");
-        doc.setTextColor(100, 100, 100);
-
-        // Page number centered at bottom
+        // --- Hall + RNBB ---
+        doc.setFont("Helvetica", "normal");
+        doc.setFontSize(8.2);
         doc.text(
-          `Page ${page} of ${pageCount}`,
-          pageWidth / 2,
-          pageHeight - 25,
+          `R: ${s.hall} - ${s.rnbb}`,
+          centerX,
+          y + 12,
           { align: "center" }
         );
 
-        // Generation date on left
-        const today = new Date().toLocaleDateString("en-GB");
-        doc.text(`Generated: ${today}`, 30, pageHeight - 25);
-      },
-    });
+        // --- Date + Session ---
+        doc.text(
+          `${s.date} , ${s.session}`,
+          centerX,
+          y + 22,
+          { align: "center" }
+        );
 
-    doc.save("seat-arrangement.pdf");
-  };
+        x += colWidth + COL_GAP;
+        index++;
+      }
+
+      y += ROW_HEIGHT; // row gap preserved
+    }
+
+    if (index < stickers.length) doc.addPage();
+  }
+
+  /* ======================
+     FILE NAME
+  ====================== */
+  const exportDate = formatDateForFile(examData.date);
+  const exportTime = formatExportTime();
+
+  doc.save(`RNBB-Stickers-${exportDate}_${exportTime}.pdf`);
+};
+
 
   // FIX THE DISABLED CONDITION
   const isGenerateDisabled =
@@ -1020,7 +1200,7 @@ const PDFGenerator = ({ examData }) => {
     setIsError(hasError);
   };
 
-    const checkMismatch = (paperDate, paperSession) => {
+  const checkMismatch = (paperDate, paperSession) => {
     return paperDate !== examData.date || paperSession !== examData.session;
   };
 
@@ -1028,27 +1208,58 @@ const PDFGenerator = ({ examData }) => {
     <div className="bg-gray-50 border border-gray-300 rounded-xl p-6">
       <h2 className="text-xl font-bold mb-4 text-gray-800">PDF Generation</h2>
 
-      {/* Add Summary Section */}
+      {/* Current Setup */}
       <div className="mb-4 p-4 bg-white border border-gray-300 rounded-lg">
         <h3 className="font-bold text-gray-800 mb-2">Current Setup</h3>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <p className="text-gray-600">Total Papers</p>
             <p className="font-bold">{papers.length}</p>
           </div>
+
           <div>
             <p className="text-gray-600">Total Students</p>
             <p className="font-bold">{totalStudents}</p>
           </div>
+
           <div>
             <p className="text-gray-600">Total Halls</p>
-            <p className="font-bold">{halls.length}</p>
+            <p className="font-bold">{regHallCount + sdeHallCount}</p>
           </div>
+
           <div>
             <p className="text-gray-600">Total Capacity</p>
             <p className="font-bold">{totalCapacity}</p>
           </div>
         </div>
+      </div>
+
+      {/* REG / SDE Split */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div>
+          <p className="text-gray-600">REG Students</p>
+          <p className="font-bold">{regStudents}</p>
+        </div>
+
+        <div>
+          <p className="text-gray-600">REG Halls</p>
+          <p className="font-bold">{regHallCount}</p>
+        </div>
+
+        {hasSDE && (
+          <>
+            <div>
+              <p className="text-gray-600">SDE Students</p>
+              <p className="font-bold">{sdeStudents}</p>
+            </div>
+
+            <div>
+              <p className="text-gray-600">SDE Halls</p>
+              <p className="font-bold">{sdeHallCount}</p>
+            </div>
+          </>
+        )}
       </div>
 
       <button
@@ -1061,11 +1272,11 @@ const PDFGenerator = ({ examData }) => {
         <Users className="w-4 h-4" /> Preview Distribution
       </button>
 
-          {isError && (
-  <div className="mb-4 p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg">
-    ⚠ Fix date/session mismatches before continuing.
-  </div>
-)}
+      {isError && (
+        <div className="mb-4 p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg">
+          ⚠ Fix date/session mismatches before continuing.
+        </div>
+      )}
       {/* i mean hall name and invigilator name alert message */}
       <div className="mb-4">
         {distributionPreview.some((hall) => hall.hall.startsWith("HALL-")) && (
@@ -1112,6 +1323,18 @@ const PDFGenerator = ({ examData }) => {
           }`}
         >
           <Download className="w-4 h-4" /> Exam Summary PDF
+        </button>
+
+        <button
+          disabled={examData?.isRnbb !== true}
+          onClick={generateRnbbStickersPDF}
+          className={`flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium ${
+            examData?.isRnbb !== true
+              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+              : "bg-yellow-600 text-white hover:bg-yellow-700"
+          }`}
+        >
+          <Tag className="w-4 h-4" /> Generate RNBB Stickers
         </button>
       </div>
 
