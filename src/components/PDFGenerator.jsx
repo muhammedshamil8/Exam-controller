@@ -734,7 +734,10 @@ const PDFGenerator = ({ examData }) => {
       );
     }
 
-    doc.save("exam-summary-distribution.pdf");
+        const exportDate = formatDateForFile(examData.date);
+    const exportTime = formatExportTime();
+
+    doc.save(`exam-summary-distribution-${exportDate}_${exportTime}.pdf`);
   };
 
   // ----------------- FIXED: Seat Arrangement PDF Generation -------------------
@@ -869,7 +872,10 @@ const PDFGenerator = ({ examData }) => {
       },
     });
 
-    doc.save("seat-arrangement.pdf");
+       const exportDate = formatDateForFile(examData.date);
+    const exportTime = formatExportTime();
+
+    doc.save(`seat-arrangement-${exportDate}_${exportTime}.pdf`);
   };
 
   // ----------------- FIXED: Question Paper Distribution PDF (Invigilator Format) -------------------
@@ -1102,7 +1108,7 @@ const PDFGenerator = ({ examData }) => {
     const COL_GAP = 18;
 
     const marginX = 28;
-    const marginY = 50;
+    const marginY = 60;
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const usableWidth = pageWidth - marginX * 2;
@@ -1337,7 +1343,7 @@ const PDFGenerator = ({ examData }) => {
           <Download className="w-4 h-4" /> Exam Summary PDF
         </button>
 
-        {examData?.isRnbb !== true && (
+        {/* {examData?.isRnbb !== true && ( */}
           <button
             disabled={examData?.isRnbb !== true}
             onClick={generateRnbbStickersPDF}
@@ -1349,7 +1355,7 @@ const PDFGenerator = ({ examData }) => {
           >
             <Tag className="w-4 h-4" /> Generate RNBB Stickers
           </button>
-        )}
+        {/* )} */}
       </div>
 
       {/* Distribution Preview */}
