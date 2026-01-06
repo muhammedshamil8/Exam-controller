@@ -646,13 +646,13 @@ const PDFGenerator = ({ examData }) => {
 
     // ---------- HEADER ----------
     doc.setFontSize(16);
-    doc.text("EXAM SUMMARY - TO: EXAM CHIEF", pageWidth / 2, currentY, {
+    doc.text("EXAM SUMMARY", pageWidth / 2, currentY, {
       align: "center",
     });
     currentY += 25;
 
     doc.setFontSize(12);
-    const examDate = regPapers[0]?.dateTime || "N/A";
+    const examDate = regPapers[0]?.extractedDateTime || "N/A";
     doc.text(`Date of Exam : ${examDate}`, pageWidth / 2, currentY, {
       align: "center",
     });
@@ -752,90 +752,111 @@ const PDFGenerator = ({ examData }) => {
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    let currentY = 50;
 
-    // Header - Centered with better spacing
-    doc.setFontSize(18);
+    /* ======================
+     GLOBAL SPACING CONTROL
+  ====================== */
+    const TOP_MARGIN = 50;
+    const SECTION_GAP = 14;
+    const BLOCK_GAP = 24;
+
+    let currentY = TOP_MARGIN;
+
+    /* ======================
+     HEADER
+  ====================== */
     doc.setFont(undefined, "bold");
+    doc.setFontSize(18);
     doc.text("SEAT ARRANGEMENT", pageWidth / 2, currentY, { align: "center" });
-    currentY += 20;
 
-    doc.setFontSize(14);
+    currentY += SECTION_GAP + 6;
+
+    doc.setFontSize(13);
+    doc.setFont(undefined, "normal");
     doc.text("UNIVERSITY EXAMINATION", pageWidth / 2, currentY, {
       align: "center",
     });
-    currentY += 30;
 
-    // Exam details with better formatting
+    currentY += BLOCK_GAP;
+
+    /* ======================
+     EXAM DETAILS
+  ====================== */
     doc.setFontSize(11);
-    doc.setFont(undefined, "normal");
-    const examDate = papers[0]?.dateTime || "04-11-2025 FN";
-    doc.text(`Date of Examination: ${examDate}`, pageWidth / 2, currentY, {
+
+    const examDate = papers[0]?.extractedDateTime || "00-00-0000 FN";
+    doc.text(`Date of Examination : ${examDate}`, pageWidth / 2, currentY, {
       align: "center",
     });
-    currentY += 8;
-    // currentY += 8;
 
-    const totalStudents = seatArrangementData.reduce(
-      (sum, hall) => sum + hall.students.length,
-      0
-    );
-    // doc.text(`Total Students: ${totalStudents}`, pageWidth / 2, currentY, {
-    //   align: "center",
-    // });
-    currentY += 25;
+    currentY += BLOCK_GAP;
 
-    // Seat Arrangement Table with improved styling
+    /* ======================
+     TABLE DATA
+  ====================== */
     const seatData = seatArrangementData.map((hall) => {
       const rangeDisplay = formatRegisterNumbers(hall.students);
       const regList = formatRegisterNumbersList(hall.students);
-
       return [hall.sl, hall.room, rangeDisplay, regList];
     });
 
+    /* ======================
+     TABLE
+  ====================== */
     autoTable(doc, {
       startY: currentY,
+
       head: [["SL", "ROOM", "REG NO RANGE", "REGISTER NUMBERS"]],
       body: seatData,
+
+      margin: {
+        top: TOP_MARGIN,
+        left: 30,
+        right: 30,
+        bottom: 40,
+      },
+
       styles: {
+        font: undefined,
         fontSize: 9,
-        fillColor: [255, 255, 255],
         textColor: [40, 40, 40],
-        lineColor: [100, 100, 100],
-        lineWidth: 0.75,
+        lineColor: [120, 120, 120],
+        lineWidth: 0.6,
         cellPadding: 6,
         valign: "middle",
-        halign: "left",
       },
+
       headStyles: {
+        fontStyle: "bold",
+        fontSize: 10,
         fillColor: [240, 240, 240],
         textColor: [0, 0, 0],
-        fontStyle: "bold",
-        lineColor: [100, 100, 100],
-        lineWidth: 0.75,
-        fontSize: 10,
+        lineWidth: 0.8,
         cellPadding: 8,
       },
-      columnStyles: {
-        0: { cellWidth: 35, halign: "center" }, // SL
-        1: { cellWidth: 80, halign: "center" }, // ROOM
-        2: { cellWidth: 140 }, // REG NO RANGE
-        3: { cellWidth: 275 }, // REG NOS
-      },
-      margin: { left: 30, right: 30, top: 50, bottom: 40 },
+
       alternateRowStyles: {
         fillColor: [250, 250, 250],
       },
-      didDrawPage: (data) => {
-        // Footer with page numbers
+
+      columnStyles: {
+        0: { cellWidth: 35, halign: "center" }, // SL
+        1: { cellWidth: 80, halign: "center" }, // ROOM
+        2: { cellWidth: 140 }, // RANGE
+        3: { cellWidth: 275 }, // REGISTER NUMBERS
+      },
+
+      didDrawPage: () => {
+        /* ======================
+         FOOTER
+      ====================== */
         const pageCount = doc.internal.getNumberOfPages();
         const page = doc.internal.getCurrentPageInfo().pageNumber;
 
         doc.setFontSize(9);
         doc.setFont(undefined, "normal");
-        doc.setTextColor(100, 100, 100);
+        doc.setTextColor(120, 120, 120);
 
-        // Page number centered at bottom
         doc.text(
           `Page ${page} of ${pageCount}`,
           pageWidth / 2,
@@ -843,9 +864,8 @@ const PDFGenerator = ({ examData }) => {
           { align: "center" }
         );
 
-        // Generation date on left
         const today = new Date().toLocaleDateString("en-GB");
-        doc.text(`Generated: ${today}`, 30, pageHeight - 25);
+        doc.text(`Generated : ${today}`, 30, pageHeight - 25);
       },
     });
 
@@ -1082,7 +1102,7 @@ const PDFGenerator = ({ examData }) => {
     const COL_GAP = 18;
 
     const marginX = 28;
-    const marginY = 34;
+    const marginY = 50;
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const usableWidth = pageWidth - marginX * 2;
@@ -1132,12 +1152,12 @@ const PDFGenerator = ({ examData }) => {
           const centerX = x + colWidth / 2;
 
           // --- Register Number (CONTROLLED BOLD) ---
-          doc.setFont("Times", "bold");
+          doc.setFont(undefined, "bold");
           doc.setFontSize(9.8); // slightly reduced to avoid heavy look
           doc.text(s.regNo, centerX, y, { align: "center" });
 
           // --- Hall + RNBB ---
-          doc.setFont("Times", "normal");
+          doc.setFont(undefined, "normal");
           doc.setFontSize(8.2);
           doc.text(`R: ${s.hall} - ${s.rnbb}`, centerX, y + 12, {
             align: "center",
@@ -1317,17 +1337,19 @@ const PDFGenerator = ({ examData }) => {
           <Download className="w-4 h-4" /> Exam Summary PDF
         </button>
 
-        <button
-          disabled={examData?.isRnbb !== true}
-          onClick={generateRnbbStickersPDF}
-          className={`flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium ${
-            examData?.isRnbb !== true
-              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-              : "bg-yellow-600 text-white hover:bg-yellow-700"
-          }`}
-        >
-          <Tag className="w-4 h-4" /> Generate RNBB Stickers
-        </button>
+        {examData?.isRnbb !== true && (
+          <button
+            disabled={examData?.isRnbb !== true}
+            onClick={generateRnbbStickersPDF}
+            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium ${
+              examData?.isRnbb !== true
+                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                : "bg-yellow-600 text-white hover:bg-yellow-700"
+            }`}
+          >
+            <Tag className="w-4 h-4" /> Generate RNBB Stickers
+          </button>
+        )}
       </div>
 
       {/* Distribution Preview */}
