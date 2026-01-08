@@ -652,7 +652,7 @@ const PDFGenerator = ({ examData }) => {
     currentY += 25;
 
     doc.setFontSize(12);
-    const examDate = regPapers[0]?.extractedDateTime || "N/A";
+    const examDate = regPapers[0]?.extractedDateTime || "00-00-0000 FN";
     doc.text(`Date of Exam : ${examDate}`, pageWidth / 2, currentY, {
       align: "center",
     });
@@ -891,7 +891,7 @@ const PDFGenerator = ({ examData }) => {
       format: "a4",
     });
 
-    const examDate = papers[0]?.dateTime || "04-11-2025 FN";
+    const examDate = papers[0]?.extractedDateTime || "00-00-0000 FN";
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 30; // Reduced margin for more space
@@ -918,6 +918,7 @@ const PDFGenerator = ({ examData }) => {
         ["Room Assigned", hallData.hall],
         ["Hall No:", hallIndex + 1],
         ["No of Students", hallData.students.length],
+        ["Exam Type", hasSDE && sdeHalls.some((h) => h.name === hallData.hall) ? "SDE" : "REG"],
         ["Exam Date", examDate],
       ];
 
